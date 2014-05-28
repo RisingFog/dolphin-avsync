@@ -183,12 +183,6 @@ bool AVIDump::CreateFile()
 void AVIDump::CloseFile()
 {
 
-	if (timecodes)
-	{
-		std::fclose(timecodes);
-		timecodes = 0;
-	}
-
 	if (m_streamCompressed)
 	{
 		AVIStreamClose(m_streamCompressed);
@@ -224,6 +218,12 @@ void AVIDump::Stop()
 	// store one copy of the last video frame, CFR case
 	if (SConfig::GetInstance().m_DumpAudioToAVI && m_streamCompressed)
 		AVIStreamWrite(m_streamCompressed, m_frameCount++, 1, GetFrame(), m_bitmap.biSizeImage, AVIIF_KEYFRAME, NULL, &m_byteBuffer);
+	// close the timecodes file (moved here to prevent crashing Dolphin at 2GB splits)
+	if (timecodes)
+	{
+		std::fclose(timecodes);
+		timecodes = 0;
+	}
 
 	CloseFile();
 	m_fileCount = 0;
