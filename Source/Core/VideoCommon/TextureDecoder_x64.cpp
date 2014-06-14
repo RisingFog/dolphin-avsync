@@ -2,6 +2,7 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <cmath>
 
 #include "Common/Common.h"
@@ -43,9 +44,9 @@ extern const unsigned char sfont_raw[][9*10];
  GC_ALIGNED16(u8 texMem[TMEM_SIZE]);
 
 
-// Gamecube/Wii texture decoder
+// GameCube/Wii texture decoder
 
-// Decodes all known Gamecube/Wii texture formats.
+// Decodes all known GameCube/Wii texture formats.
 // by ector
 
 int TexDecoder_GetTexelSizeInNibbles(int format)
@@ -2037,8 +2038,8 @@ PC_TexFormat TexDecoder_Decode(u8 *dst, const u8 *src, int width, int height, in
 	if ((!TexFmt_Overlay_Enable) || (retval == PC_TEX_FMT_NONE))
 		return retval;
 
-	int w = min(width, 40);
-	int h = min(height, 10);
+	int w = std::min(width, 40);
+	int h = std::min(height, 10);
 
 	int xoff = (width - w) >> 1;
 	int yoff = (height - h) >> 1;

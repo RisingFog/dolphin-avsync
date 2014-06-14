@@ -29,7 +29,7 @@ enum PlayMode
 	MODE_PLAYING
 };
 
-// Gamecube Controller State
+// GameCube Controller State
 #pragma pack(push,1)
 struct ControllerState
 {
@@ -114,7 +114,9 @@ struct DTMHeader
 	u8 reserved[13];        // Padding for any new config options
 	u8 discChange[40];      // Name of iso file to switch to, for two disc games.
 	u8 revision[20];        // Git hash
-	u8 reserved2[27];       // Make heading 256 bytes, just because we can
+	u32 DSPiromHash;
+	u32 DSPcoefHash;
+	u8 reserved2[19];       // Make heading 256 bytes, just because we can
 };
 static_assert(sizeof(DTMHeader) == 256, "DTMHeader should be 256 bytes");
 

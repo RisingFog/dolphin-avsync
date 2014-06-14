@@ -39,21 +39,21 @@ BreakPoints breakpoints;
 MemChecks memchecks;
 PPCDebugInterface debug_interface;
 
-void CompactCR()
+u32 CompactCR()
 {
 	u32 new_cr = ppcState.cr_fast[0] << 28;
 	for (int i = 1; i < 8; i++)
 	{
 		new_cr |= ppcState.cr_fast[i] << (28 - i * 4);
 	}
-	ppcState.cr = new_cr;
+	return new_cr;
 }
 
-void ExpandCR()
+void ExpandCR(u32 cr)
 {
 	for (int i = 0; i < 8; i++)
 	{
-		ppcState.cr_fast[i] = (ppcState.cr >> (28 - i * 4)) & 0xF;
+		ppcState.cr_fast[i] = (cr >> (28 - i * 4)) & 0xF;
 	}
 }
 
@@ -95,7 +95,6 @@ void ResetRegisters()
 	ppcState.spr[SPR_ECID_M] = 0x1840c00d;
 	ppcState.spr[SPR_ECID_L] = 0x82bb08e8;
 
-	ppcState.cr = 0;
 	ppcState.fpscr = 0;
 	ppcState.pc = 0;
 	ppcState.npc = 0;
@@ -116,7 +115,6 @@ void Init(int cpu_core)
 {
 	FPURoundMode::SetPrecisionMode(FPURoundMode::PREC_53);
 
-	memset(ppcState.mojs, 0, sizeof(ppcState.mojs));
 	memset(ppcState.sr, 0, sizeof(ppcState.sr));
 	ppcState.DebugCount = 0;
 	ppcState.dtlb_last = 0;
@@ -362,7 +360,7 @@ void CheckExceptions()
 	}
 	else if (exceptions & EXCEPTION_FPU_UNAVAILABLE)
 	{
-		//This happens a lot - Gamecube OS uses deferred FPU context switching
+		//This happens a lot - GameCube OS uses deferred FPU context switching
 		SRR0 = PC; // re-execute the instruction
 		SRR1 = MSR & 0x87C0FFFF;
 		MSR |= (MSR >> 16) & 1;

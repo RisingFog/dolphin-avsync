@@ -110,6 +110,7 @@ static const u32 EFB_CACHE_RECT_SIZE = 64; // Cache 64x64 blocks.
 static const u32 EFB_CACHE_WIDTH = (EFB_WIDTH + EFB_CACHE_RECT_SIZE - 1) / EFB_CACHE_RECT_SIZE; // round up
 static const u32 EFB_CACHE_HEIGHT = (EFB_HEIGHT + EFB_CACHE_RECT_SIZE - 1) / EFB_CACHE_RECT_SIZE;
 static bool s_efbCacheValid[2][EFB_CACHE_WIDTH * EFB_CACHE_HEIGHT];
+static bool s_efbCacheIsCleared = false;
 static std::vector<u32> s_efbCache[2][EFB_CACHE_WIDTH * EFB_CACHE_HEIGHT]; // 2 for PEEK_Z and PEEK_COLOR
 
 int GetNumMSAASamples(int MSAAMode)
@@ -462,7 +463,7 @@ Renderer::Renderer()
 
 	if (GLInterface->GetMode() == GLInterfaceMode::MODE_OPENGLES3)
 	{
-		if (strstr(g_ogl_config.glsl_version, "3.00"))
+		if (strstr(g_ogl_config.glsl_version, "3.0"))
 		{
 			g_ogl_config.eSupportedGLSLVersion = GLSLES_300;
 		}
@@ -615,6 +616,7 @@ Renderer::Renderer()
 			}
 	}
 	UpdateActiveConfig();
+	ClearEFBCache();
 }
 
 Renderer::~Renderer()
@@ -680,19 +682,18 @@ void Renderer::DrawDebugInfo()
 {
 	// Reset viewport for drawing text
 	glViewport(0, 0, GLInterface->GetBackBufferWidth(), GLInterface->GetBackBufferHeight());
+
 	// Draw various messages on the screen, like FPS, statistics, etc.
-	char debugtext_buffer[8192];
-	char *p = debugtext_buffer;
-	p[0] = 0;
+	std::string debug_info;
 
 	if (g_ActiveConfig.bShowFPS)
-		p+=sprintf(p, "FPS: %d\n", s_fps);
+		debug_info += StringFromFormat("FPS: %d\n", s_fps);
 
 	if (SConfig::GetInstance().m_ShowLag)
-		p+=sprintf(p, "Lag: %" PRIu64 "\n", Movie::g_currentLagCount);
+		debug_info += StringFromFormat("Lag: %" PRIu64 "\n", Movie::g_currentLagCount);
 
 	if (g_ActiveConfig.bShowInputDisplay)
-		p+=sprintf(p, "%s", Movie::GetInputDisplay().c_str());
+		debug_info += Movie::GetInputDisplay();
 
 	if (GLInterface->GetMode() == GLInterfaceMode::MODE_OPENGL && g_ActiveConfig.bShowEFBCopyRegions)
 	{
@@ -815,16 +816,16 @@ void Renderer::DrawDebugInfo()
 	}
 
 	if (g_ActiveConfig.bOverlayStats)
-		p = Statistics::ToString(p);
+		debug_info += Statistics::ToString();
 
 	if (g_ActiveConfig.bOverlayProjStats)
-		p = Statistics::ToStringProj(p);
+		debug_info += Statistics::ToStringProj();
 
-	// Render a shadow, and then the text.
-	if (p != debugtext_buffer)
+	if (!debug_info.empty())
 	{
-		Renderer::RenderText(debugtext_buffer, 21, 21, 0xDD000000);
-		Renderer::RenderText(debugtext_buffer, 20, 20, 0xFF00FFFF);
+		// Render a shadow, and then the text.
+		Renderer::RenderText(debug_info, 21, 21, 0xDD000000);
+		Renderer::RenderText(debug_info, 20, 20, 0xFF00FFFF);
 	}
 }
 
@@ -883,11 +884,11 @@ void Renderer::SetColorMask()
 
 void ClearEFBCache()
 {
-	for (u32 i = 0; i < EFB_CACHE_WIDTH * EFB_CACHE_HEIGHT; ++i)
-		s_efbCacheValid[0][i] = false;
-
-	for (u32 i = 0; i < EFB_CACHE_WIDTH * EFB_CACHE_HEIGHT; ++i)
-		s_efbCacheValid[1][i] = false;
+	if (!s_efbCacheIsCleared)
+	{
+		s_efbCacheIsCleared = true;
+		memset(s_efbCacheValid, 0, sizeof(s_efbCacheValid));
+	}
 }
 
 void Renderer::UpdateEFBCache(EFBAccessType type, u32 cacheRectIdx, const EFBRectangle& efbPixelRc, const TargetRectangle& targetPixelRc, const u32* data)
@@ -917,6 +918,7 @@ void Renderer::UpdateEFBCache(EFBAccessType type, u32 cacheRectIdx, const EFBRec
 	}
 
 	s_efbCacheValid[cacheType][cacheRectIdx] = true;
+	s_efbCacheIsCleared = false;
 }
 
 // This function allows the CPU to directly access the EFB.

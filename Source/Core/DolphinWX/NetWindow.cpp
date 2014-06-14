@@ -335,6 +335,7 @@ NetPlayDiag::NetPlayDiag(wxWindow* const parent, const CGameListCtrl* const game
 	m_chat_msg_text = new wxTextCtrl(panel, wxID_ANY, wxEmptyString
 		, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	m_chat_msg_text->Bind(wxEVT_TEXT_ENTER, &NetPlayDiag::OnChat, this);
+	m_chat_msg_text->SetMaxLength(2000);
 
 	wxButton* const chat_msg_btn = new wxButton(panel, wxID_ANY, _("Send"));
 	chat_msg_btn->Bind(wxEVT_BUTTON, &NetPlayDiag::OnChat, this);
@@ -425,6 +426,8 @@ void NetPlayDiag::OnChat(wxCommandEvent&)
 
 	if (s.Length())
 	{
+		if (s.Length() > 2000)
+			s.erase(2000);
 		netplay_client->SendChatMessage(WxStrToStr(s));
 		m_chat_text->AppendText(s.Prepend(" >> ").Append('\n'));
 		m_chat_msg_text->Clear();
@@ -536,14 +539,40 @@ void NetPlayDiag::OnThread(wxCommandEvent& event)
 	std::string tmps;
 	netplay_client->GetPlayerList(tmps, m_playerids);
 
-	const int selection = m_player_lbox->GetSelection();
+	wxString selection;
+	if (m_player_lbox->GetSelection() != wxNOT_FOUND)
+		selection = m_player_lbox->GetString(m_player_lbox->GetSelection());
 
 	m_player_lbox->Clear();
 	std::istringstream ss(tmps);
 	while (std::getline(ss, tmps))
 		m_player_lbox->Append(StrToWxStr(tmps));
 
-	m_player_lbox->SetSelection(selection);
+	// remove ping from selection string, in case it has changed
+	selection.erase(selection.find_last_of("|") + 1);
+
+	if (selection.Length() > 0)
+	{
+		for (unsigned int i = 0; i < m_player_lbox->GetCount(); ++i)
+		{
+			if (selection == m_player_lbox->GetString(i).Mid(0, selection.Length()))
+			{
+				m_player_lbox->SetSelection(i);
+				break;
+			}
+		}
+	}
+
+	// flash window in taskbar when someone joins if window isn't active
+	static u8 numPlayers = 1;
+	bool focus = (wxWindow::FindFocus() == this || (wxWindow::FindFocus() != nullptr && wxWindow::FindFocus()->GetParent() == this) ||
+	             (wxWindow::FindFocus() != nullptr && wxWindow::FindFocus()->GetParent() != nullptr
+	              && wxWindow::FindFocus()->GetParent()->GetParent() == this));
+	if (netplay_server != nullptr && numPlayers < m_playerids.size() && !focus)
+	{
+		RequestUserAttention();
+	}
+	numPlayers = m_playerids.size();
 
 	switch (event.GetId())
 	{

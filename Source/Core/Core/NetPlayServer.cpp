@@ -2,6 +2,8 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
+#include <vector>
+
 #include "Core/NetPlayServer.h"
 
 NetPlayServer::~NetPlayServer()
@@ -112,15 +114,8 @@ void NetPlayServer::ThreadFunc()
 	}
 
 	// close listening socket and client sockets
-	{
-	std::map<sf::SocketTCP, Client>::reverse_iterator
-		i = m_players.rbegin(),
-		e = m_players.rend();
-	for ( ; i!=e; ++i)
-		i->second.socket.Close();
-	}
-
-	return;
+	for (auto& player_entry : m_players)
+		player_entry.second.socket.Close();
 }
 
 // called from ---NETPLAY--- thread
@@ -153,7 +148,16 @@ unsigned int NetPlayServer::OnConnect(sf::SocketTCP& socket)
 	rpac >> player.name;
 
 	// give new client first available id
-	player.pid = (PlayerId)(m_players.size() + 1);
+	PlayerId pid = 1;
+	for (auto i = m_players.begin(); i != m_players.end(); ++i)
+	{
+		if (i->second.pid == pid)
+		{
+			pid++;
+			i = m_players.begin();
+		}
+	}
+	player.pid = pid;
 
 	// try to automatically assign new user a pad
 	for (PadMapping& mapping : m_pad_map)
@@ -415,15 +419,14 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, sf::SocketTCP& socket)
 			PadMapping map = 0;
 			u8 size;
 			packet >> map >> size;
-			u8* data = new u8[size];
-			for (unsigned int i = 0; i < size; ++i)
+			std::vector<u8> data(size);
+			for (size_t i = 0; i < data.size(); ++i)
 				packet >> data[i];
 
 			// If the data is not from the correct player,
 			// then disconnect them.
 			if (m_wiimote_map[map] != player.pid)
 			{
-				delete[] data;
 				return 1;
 			}
 
@@ -432,10 +435,8 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, sf::SocketTCP& socket)
 			spac << (MessageId)NP_MSG_WIIMOTE_DATA;
 			spac << map;
 			spac << size;
-			for (unsigned int i = 0; i < size; ++i)
-				spac << data[i];
-
-			delete[] data;
+			for (const u8& byte : data)
+				spac << byte;
 
 			std::lock_guard<std::recursive_mutex> lks(m_crit.send);
 			SendToClients(spac, player.pid);
