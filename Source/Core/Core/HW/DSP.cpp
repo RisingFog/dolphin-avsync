@@ -500,9 +500,9 @@ void UpdateAudioDMA()
 			void *address = Memory::GetPointer(g_audioDMA.SourceAddress);
 			unsigned samples = 8 * g_audioDMA.AudioDMAControl.NumBlocks;
 			if (SConfig::GetInstance().m_DumpAudio)
-				HackDump->dumpsamplesBE(dsp_emulator->DSP_PeekAIBuffer(g_audioDMA.SourceAddress, samples), samples, oldrate);
+				HackDump->dumpsamplesBE((short*)address, samples, oldrate);
 			if (SConfig::GetInstance().m_DumpAudioToAVI)
-				AVIDump::AddSoundBE(dsp_emulator->DSP_PeekAIBuffer(g_audioDMA.SourceAddress, samples), samples, oldrate);
+				AVIDump::AddSoundBE((short*)address, samples, oldrate);
 			AudioCommon::SendAIBuffer((short*)address, samples);
 			GenerateDSPInterrupt(DSP::INT_AID);
 			g_audioDMA.BlocksLeft = g_audioDMA.AudioDMAControl.NumBlocks;

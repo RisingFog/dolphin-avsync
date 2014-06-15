@@ -282,12 +282,6 @@ u32 DSPLLE::DSP_UpdateRate()
 	return 12600; // TO BE TWEAKED
 }
 
-const short *DSPLLE::DSP_PeekAIBuffer(unsigned int address, unsigned int num_samples)
-{
-	address &= (address & 0x10000000) ? 0x13ffffff : 0x01ffffff;
-	return (const short *)&g_dsp.cpu_ram[address];
-}
-
 void DSPLLE::PauseAndLock(bool doLock, bool unpauseOnUnlock)
 {
 	if (doLock)

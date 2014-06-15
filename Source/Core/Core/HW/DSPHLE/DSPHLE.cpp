@@ -264,12 +264,6 @@ u16 DSPHLE::DSP_ReadControlRegister()
 	return m_DSPControl.Hex;
 }
 
-const short *DSPHLE::DSP_PeekAIBuffer(unsigned int address, unsigned int num_samples)
-{
-	return (const short *)HLEMemory_Get_Pointer(address);
-	
-}
-
 void DSPHLE::PauseAndLock(bool doLock, bool unpauseOnUnlock)
 {
 }

@@ -27,7 +27,6 @@ public:
 	virtual unsigned short DSP_ReadMailBoxLow(bool _CPUMailbox) override;
 	virtual unsigned short DSP_ReadControlRegister() override;
 	virtual unsigned short DSP_WriteControlRegister(unsigned short) override;
-	virtual const short *DSP_PeekAIBuffer(unsigned int address, unsigned int num_samples);
 	virtual void DSP_Update(int cycles) override;
 	virtual void DSP_StopSoundStream() override;
 	virtual u32 DSP_UpdateRate() override;
