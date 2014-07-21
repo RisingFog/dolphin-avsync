@@ -6,7 +6,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include "VideoCommon/EmuWindow.h"
 #endif
 
 #include "AudioCommon/AudioCommon.h"
@@ -15,12 +14,12 @@
 #include "Common/Common.h"
 #include "Common/CommonPaths.h"
 #include "Common/CPUDetect.h"
-#include "Common/LogManager.h"
 #include "Common/MathUtil.h"
 #include "Common/MemoryUtil.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/Timer.h"
+#include "Common/Logging/LogManager.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -209,9 +208,8 @@ bool Init()
 	if (g_aspect_wide)
 	{
 		IniFile gameIni = _CoreParameter.LoadGameIni();
-		gameIni.Get("Wii", "Widescreen", &g_aspect_wide,
-			!!SConfig::GetInstance().m_SYSCONF->
-				GetData<u8>("IPL.AR"));
+		gameIni.GetOrCreateSection("Wii")->Get("Widescreen", &g_aspect_wide,
+		     !!SConfig::GetInstance().m_SYSCONF->GetData<u8>("IPL.AR"));
 	}
 
 	// g_pWindowHandle is first the m_Panel handle,
@@ -266,10 +264,6 @@ void Stop()  // - Hammertime!
 	g_EmuThread.join(); // Wait for emuthread to close.
 
 	INFO_LOG(CONSOLE, "%s", StopMessage(true, "Main Emu thread stopped").c_str());
-
-#ifdef _WIN32
-	EmuWindow::Close();
-#endif
 
 	// Clear on screen messages that haven't expired
 	g_video_backend->Video_ClearMessages();
@@ -379,10 +373,6 @@ void EmuThread()
 	DisplayMessage(cpu_info.brand_string, 8000);
 	DisplayMessage(cpu_info.Summarize(), 8000);
 	DisplayMessage(_CoreParameter.m_strFilename, 3000);
-	if (cpu_info.IsUnsafe() && (NetPlay::IsNetPlayRunning() || Movie::IsRecordingInput() || Movie::IsPlayingInput()))
-	{
-		PanicAlertT("Warning: Netplay/movies will desync because your CPU does not support DAZ and Dolphin does not emulate it anymore.");
-	}
 
 	Movie::Init();
 
@@ -691,9 +681,9 @@ void UpdateTitle()
 	std::string SFPS;
 
 	if (Movie::IsPlayingInput())
-		SFPS = StringFromFormat("VI: %u/%u - Frame: %u/%u - FPS: %.0f - VPS: %.0f - %.0f%%", (u32)Movie::g_currentFrame, (u32)Movie::g_totalFrames, (u32)Movie::g_currentInputCount, (u32)Movie::g_totalInputCount, FPS, VPS, Speed);
+		SFPS = StringFromFormat("VI: %u/%u - Input: %u/%u - FPS: %.0f - VPS: %.0f - %.0f%%", (u32)Movie::g_currentFrame, (u32)Movie::g_totalFrames, (u32)Movie::g_currentInputCount, (u32)Movie::g_totalInputCount, FPS, VPS, Speed);
 	else if (Movie::IsRecordingInput())
-		SFPS = StringFromFormat("VI: %u - Frame: %u - FPS: %.0f - VPS: %.0f - %.0f%%", (u32)Movie::g_currentFrame, (u32)Movie::g_currentInputCount, FPS, VPS, Speed);
+		SFPS = StringFromFormat("VI: %u - Input: %u - FPS: %.0f - VPS: %.0f - %.0f%%", (u32)Movie::g_currentFrame, (u32)Movie::g_currentInputCount, FPS, VPS, Speed);
 	else
 	{
 		SFPS = StringFromFormat("FPS: %.0f - VPS: %.0f - %.0f%%", FPS, VPS, Speed);

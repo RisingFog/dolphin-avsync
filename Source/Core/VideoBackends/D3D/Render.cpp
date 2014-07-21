@@ -26,7 +26,6 @@
 
 #include "VideoCommon/AVIDump.h"
 #include "VideoCommon/BPFunctions.h"
-#include "VideoCommon/EmuWindow.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FPSCounter.h"
 #include "VideoCommon/ImageWrite.h"
@@ -178,7 +177,7 @@ void CreateScreenshotTexture(const TargetRectangle& rc)
 	D3D::SetDebugObjectName((ID3D11DeviceChild*)s_screenshot_texture, "staging screenshot texture");
 }
 
-Renderer::Renderer()
+Renderer::Renderer(void *&window_handle)
 {
 	int x, y, w_temp, h_temp;
 
@@ -186,7 +185,7 @@ Renderer::Renderer()
 
 	Host_GetRenderWindowSize(x, y, w_temp, h_temp);
 
-	D3D::Create(EmuWindow::GetWnd());
+	D3D::Create((HWND)window_handle);
 
 	s_backbuffer_width = D3D::GetBackBufferWidth();
 	s_backbuffer_height = D3D::GetBackBufferHeight();
@@ -275,21 +274,8 @@ TargetRectangle Renderer::ConvertEFBRectangle(const EFBRectangle& rc)
 // size.
 bool Renderer::CheckForResize()
 {
-	while (EmuWindow::IsSizing())
-		Sleep(10);
-
-	if (EmuWindow::GetParentWnd())
-	{
-		// Re-stretch window to parent window size again, if it has a parent window.
-		RECT rcParentWindow;
-		GetWindowRect(EmuWindow::GetParentWnd(), &rcParentWindow);
-		int width = rcParentWindow.right - rcParentWindow.left;
-		int height = rcParentWindow.bottom - rcParentWindow.top;
-		if (width != Renderer::GetBackbufferWidth() || height != Renderer::GetBackbufferHeight())
-			MoveWindow(EmuWindow::GetWnd(), 0, 0, width, height, FALSE);
-	}
 	RECT rcWindow;
-	GetClientRect(EmuWindow::GetWnd(), &rcWindow);
+	GetClientRect(D3D::hWnd, &rcWindow);
 	int client_width = rcWindow.right - rcWindow.left;
 	int client_height = rcWindow.bottom - rcWindow.top;
 
@@ -866,7 +852,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 		{
 			s_recordWidth = GetTargetRectangle().GetWidth();
 			s_recordHeight = GetTargetRectangle().GetHeight();
-			bAVIDumping = AVIDump::Start(EmuWindow::GetParentWnd(), s_recordWidth, s_recordHeight);
+			bAVIDumping = AVIDump::Start(D3D::hWnd, s_recordWidth, s_recordHeight);
 			if (!bAVIDumping)
 			{
 				PanicAlert("Error dumping frames to AVI.");
@@ -909,6 +895,10 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 		}
 		bLastFrameDumped = false;
 	}
+
+	// Reset viewport for drawing text
+	vp = CD3D11_VIEWPORT(0.0f, 0.0f, (float)GetBackbufferWidth(), (float)GetBackbufferHeight());
+	D3D::context->RSSetViewports(1, &vp);
 
 	// Finish up the current frame, print some stats
 	if (g_ActiveConfig.bShowFPS)
@@ -1097,8 +1087,9 @@ void Renderer::ApplyState(bool bUseDstAlpha)
 		SetLogicOpMode();
 	}
 
-	D3D::context->PSSetConstantBuffers(0, 1, &PixelShaderCache::GetConstantBuffer());
-	D3D::context->VSSetConstantBuffers(0, 1, &VertexShaderCache::GetConstantBuffer());
+	ID3D11Buffer* const_buffers[2] = {PixelShaderCache::GetConstantBuffer(), VertexShaderCache::GetConstantBuffer()};
+	D3D::context->PSSetConstantBuffers(0, 1 + g_ActiveConfig.bEnablePixelLighting, const_buffers);
+	D3D::context->VSSetConstantBuffers(0, 1, const_buffers+1);
 
 	D3D::context->PSSetShader(PixelShaderCache::GetActiveShader(), nullptr, 0);
 	D3D::context->VSSetShader(VertexShaderCache::GetActiveShader(), nullptr, 0);

@@ -29,6 +29,7 @@ set(SRCS	ActionReplay.cpp
 			DSP/DSPAssembler.cpp
 			DSP/DSPDisassembler.cpp
 			DSP/DSPAccelerator.cpp
+			DSP/DSPCaptureLogger.cpp
 			DSP/DSPIntCCUtil.cpp
 			DSP/DSPIntExtOps.cpp
 			DSP/DSPHWInterface.cpp
@@ -98,6 +99,8 @@ set(SRCS	ActionReplay.cpp
 			HW/EXI_DeviceMemoryCard.cpp
 			HW/EXI_DeviceMic.cpp
 			HW/GCMemcard.cpp
+			HW/GCMemcardDirectory.cpp
+			HW/GCMemcardRaw.cpp
 			HW/GCPad.cpp
 			HW/GCPadEmu.cpp
 			HW/GPFifo.cpp

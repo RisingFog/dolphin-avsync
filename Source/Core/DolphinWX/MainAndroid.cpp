@@ -29,7 +29,7 @@
 #include "Common/CPUDetect.h"
 #include "Common/Event.h"
 #include "Common/FileUtil.h"
-#include "Common/LogManager.h"
+#include "Common/Logging/LogManager.h"
 #include "Core/BootManager.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -298,7 +298,7 @@ JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetConfig
 	ini.Load(File::GetUserPath(D_CONFIG_IDX) + std::string(file));
 	std::string value;
 
-	ini.Get(section, key, &value, defaultValue);
+	ini.GetOrCreateSection(section)->Get(key, &value, defaultValue);
 
 	return env->NewStringUTF(value.c_str());
 }
@@ -313,7 +313,7 @@ jstring jValue)
 
 	ini.Load(File::GetUserPath(D_CONFIG_IDX) + std::string(file));
 
-	ini.Set(section, key, value);
+	ini.GetOrCreateSection(section)->Set(key, value);
 	ini.Save(File::GetUserPath(D_CONFIG_IDX) + std::string(file));
 }
 

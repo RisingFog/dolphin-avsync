@@ -44,9 +44,9 @@
 #include <wx/aui/framemanager.h>
 
 #include "Common/Common.h"
-#include "Common/ConsoleListener.h"
 #include "Common/FileUtil.h"
 #include "Common/Thread.h"
+#include "Common/Logging/ConsoleListener.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -195,7 +195,7 @@ EVT_MENU(wxID_OPEN, CFrame::OnOpen)
 EVT_MENU(wxID_EXIT, CFrame::OnQuit)
 EVT_MENU(IDM_HELPWEBSITE, CFrame::OnHelp)
 EVT_MENU(IDM_HELPONLINEDOCS, CFrame::OnHelp)
-EVT_MENU(IDM_HELPGOOGLECODE, CFrame::OnHelp)
+EVT_MENU(IDM_HELPGITHUB, CFrame::OnHelp)
 EVT_MENU(wxID_ABOUT, CFrame::OnHelp)
 EVT_MENU(wxID_REFRESH, CFrame::OnRefresh)
 EVT_MENU(IDM_PLAY, CFrame::OnPlay)

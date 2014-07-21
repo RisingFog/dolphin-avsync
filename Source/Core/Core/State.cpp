@@ -63,7 +63,7 @@ static Common::Event g_compressAndDumpStateSyncEvent;
 static std::thread g_save_thread;
 
 // Don't forget to increase this after doing changes on the savestate system
-static const u32 STATE_VERSION = 22;
+static const u32 STATE_VERSION = 27;
 
 enum
 {
@@ -424,6 +424,9 @@ void LoadFileStateData(const std::string& filename, std::vector<u8>& ret_data)
 
 void LoadAs(const std::string& filename)
 {
+	if (Core::GetState() == Core::CORE_UNINITIALIZED)
+		return;
+
 	// Stop the core while we load the state
 	bool wasUnpaused = Core::PauseAndLock(true);
 
