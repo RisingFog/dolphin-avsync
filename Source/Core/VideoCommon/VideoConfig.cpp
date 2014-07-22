@@ -7,6 +7,7 @@
 #include "Common/Common.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
+#include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Movie.h"
@@ -56,7 +57,7 @@ void VideoConfig::Load(const std::string& ini_file)
 	settings->Get("UseRealXFB", &bUseRealXFB, 0);
 	settings->Get("SafeTextureCacheColorSamples", &iSafeTextureCache_ColorSamples,128);
 	settings->Get("ShowFPS", &bShowFPS, false);
-	settings->Get("LogFPSToFile", &bLogFPSToFile, false);
+	settings->Get("LogRenderTimeToFile", &bLogRenderTimeToFile, false);
 	settings->Get("ShowInputDisplay", &bShowInputDisplay, false);
 	settings->Get("OverlayStats", &bOverlayStats, false);
 	settings->Get("OverlayProjStats", &bOverlayProjStats, false);
@@ -125,9 +126,8 @@ void VideoConfig::GameIniLoad()
 #define CHECK_SETTING(section, key, var) do { \
 		decltype(var) temp = var; \
 		if (iniFile.GetIfExists(section, key, &var) && var != temp) { \
-			char buf[256]; \
-			snprintf(buf, sizeof(buf), "Note: Option \"%s\" is overridden by game ini.", key); \
-			OSD::AddMessage(buf, 7500); \
+			std::string msg = StringFromFormat("Note: Option \"%s\" is overridden by game ini.", key); \
+			OSD::AddMessage(msg, 7500); \
 			gfx_override_exists = true; \
 		} \
 	} while (0)
@@ -229,7 +229,7 @@ void VideoConfig::Save(const std::string& ini_file)
 	settings->Set("UseRealXFB", bUseRealXFB);
 	settings->Set("SafeTextureCacheColorSamples", iSafeTextureCache_ColorSamples);
 	settings->Set("ShowFPS", bShowFPS);
-	settings->Set("LogFPSToFile", bLogFPSToFile);
+	settings->Set("LogRenderTimeToFile", bLogRenderTimeToFile);
 	settings->Set("ShowInputDisplay", bShowInputDisplay);
 	settings->Set("OverlayStats", bOverlayStats);
 	settings->Set("OverlayProjStats", bOverlayProjStats);

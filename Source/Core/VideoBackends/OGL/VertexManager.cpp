@@ -29,9 +29,6 @@
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
 
-// internal state for loading vertices
-extern NativeVertexFormat *g_nativeVertexFmt;
-
 namespace OGL
 {
 //This are the initially requested size for the buffers expressed in bytes
@@ -124,7 +121,7 @@ void VertexManager::Draw(u32 stride)
 	} else {
 		glDrawRangeElements(primitive_mode, 0, max_index, index_size, GL_UNSIGNED_SHORT, (u8*)nullptr+s_index_offset);
 	}
-	INCSTAT(stats.thisFrame.numIndexedDrawCalls);
+	INCSTAT(stats.thisFrame.numDrawCalls);
 }
 
 void VertexManager::vFlush(bool useDstAlpha)

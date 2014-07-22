@@ -38,6 +38,8 @@ public:
 	virtual void DMAWrite(u32 _uAddr, u32 _uSize);
 	virtual void DMARead (u32 _uAddr, u32 _uSize);
 
+	virtual bool UseDelayedTransferCompletion() {return false;}
+
 	virtual bool IsPresent() {return false;}
 	virtual void SetCS(int) {}
 	virtual void DoState(PointerWrap&) {}
@@ -53,4 +55,4 @@ public:
 	TEXIDevices m_deviceType;
 };
 
-extern IEXIDevice* EXIDevice_Create(const TEXIDevices device_type, const int channel_num);
+IEXIDevice* EXIDevice_Create(const TEXIDevices device_type, const int channel_num);

@@ -15,12 +15,14 @@
 #endif
 
 #include <cstddef>
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
 #include <wx/chartype.h>
 #include <wx/defs.h>
 #include <wx/event.h>
+#include <wx/filename.h>
 #include <wx/frame.h>
 #include <wx/gdicmn.h>
 #include <wx/icon.h>
@@ -53,11 +55,13 @@
 #include "Core/CoreParameter.h"
 #include "Core/Movie.h"
 #include "Core/State.h"
+#include "Core/HW/DVDInterface.h"
 
 #include "DolphinWX/Frame.h"
 #include "DolphinWX/GameListCtrl.h"
 #include "DolphinWX/Globals.h"
 #include "DolphinWX/LogWindow.h"
+#include "DolphinWX/Main.h"
 #include "DolphinWX/TASInputDlg.h"
 #include "DolphinWX/WxUtils.h"
 #include "DolphinWX/Debugger/CodeWindow.h"
@@ -84,9 +88,6 @@ HWND MSWGetParent_(HWND Parent)
 
 // ---------------
 // The CPanel class to receive MSWWindowProc messages from the video backend.
-
-extern CFrame* main_frame;
-
 
 BEGIN_EVENT_TABLE(CPanel, wxPanel)
 END_EVENT_TABLE()
@@ -139,17 +140,60 @@ CRenderFrame::CRenderFrame(wxFrame* parent, wxWindowID id, const wxString& title
 	SetIcon(IconTemp);
 
 	DragAcceptFiles(true);
-	Connect(wxEVT_DROP_FILES, wxDropFilesEventHandler(CRenderFrame::OnDropFiles), nullptr, this);
+	Bind(wxEVT_DROP_FILES, &CRenderFrame::OnDropFiles, this);
 }
 
 void CRenderFrame::OnDropFiles(wxDropFilesEvent& event)
 {
 	if (event.GetNumberOfFiles() != 1)
 		return;
-	if (File::IsDirectory(event.GetFiles()[0].ToStdString()))
+	if (File::IsDirectory(WxStrToStr(event.GetFiles()[0])))
 		return;
 
-	State::LoadAs(event.GetFiles()[0].ToStdString());
+	wxFileName file = event.GetFiles()[0];
+	const std::string filepath = WxStrToStr(file.GetFullPath());
+
+	if (file.GetExt() == "dtm")
+	{
+		if (Core::IsRunning())
+			return;
+
+		if (!Movie::IsReadOnly())
+		{
+			// let's make the read-only flag consistent at the start of a movie.
+			Movie::SetReadOnly(true);
+			main_frame->GetMenuBar()->FindItem(IDM_RECORDREADONLY)->Check(true);
+		}
+
+		if (Movie::PlayInput(filepath))
+			main_frame->BootGame("");
+	}
+	else if (!Core::IsRunning())
+	{
+		main_frame->BootGame(filepath);
+	}
+	else if (IsValidSavestateDropped(filepath) && Core::IsRunning())
+	{
+		State::LoadAs(filepath);
+	}
+	else
+	{
+		DVDInterface::ChangeDisc(filepath);
+	}
+}
+
+bool CRenderFrame::IsValidSavestateDropped(const std::string& filepath)
+{
+	const int game_id_length = 6;
+	std::ifstream file(filepath, std::ios::in | std::ios::binary);
+
+	if (!file)
+		return false;
+
+	std::string internal_game_id(game_id_length, ' ');
+	file.read(&internal_game_id[0], game_id_length);
+
+	return internal_game_id == SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID();
 }
 
 #ifdef _WIN32
@@ -171,7 +215,7 @@ WXLRESULT CRenderFrame::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lPa
 
 		case WM_CLOSE:
 			// Let Core finish initializing before accepting any WM_CLOSE messages
-			if (Core::GetState() == Core::CORE_UNINITIALIZED) break;
+			if (!Core::IsRunning()) break;
 			// Use default action otherwise
 
 		default:
@@ -306,7 +350,7 @@ CFrame::CFrame(wxFrame* parent,
 	, m_LogWindow(nullptr), m_LogConfigWindow(nullptr)
 	, m_FifoPlayerDlg(nullptr), UseDebugger(_UseDebugger)
 	, m_bBatchMode(_BatchMode), m_bEdit(false), m_bTabSplit(false), m_bNoDocking(false)
-	, m_bGameLoading(false)
+	, m_bGameLoading(false), m_bClosing(false)
 {
 	for (int i = 0; i <= IDM_CODEWINDOW - IDM_LOGWINDOW; i++)
 		bFloatWindow[i] = false;
@@ -379,6 +423,7 @@ CFrame::CFrame(wxFrame* parent,
 	Movie::SetInputManip(TASManipFunction);
 
 	State::SetOnAfterLoadCallback(OnAfterLoadCallback);
+	Core::SetOnStoppedCallback(OnStoppedCallback);
 
 	// Setup perspectives
 	if (g_pCodeWindow)
@@ -489,15 +534,18 @@ void CFrame::OnActive(wxActivateEvent& event)
 
 void CFrame::OnClose(wxCloseEvent& event)
 {
+	m_bClosing = true;
+
+	// Before closing the window we need to shut down the emulation core.
+	// We'll try to close this window again once that is done.
 	if (Core::GetState() != Core::CORE_UNINITIALIZED)
 	{
 		DoStop();
-		if (Core::GetState() != Core::CORE_UNINITIALIZED)
-			return;
-		UpdateGUI();
+		event.Veto();
+		return;
 	}
 
-	//Stop Dolphin from saving the minimized Xpos and Ypos
+	// Stop Dolphin from saving the minimized Xpos and Ypos
 	if (main_frame->IsIconized())
 		main_frame->Iconize(false);
 
@@ -646,6 +694,10 @@ void CFrame::OnHostMessage(wxCommandEvent& event)
 	case WM_USER_STOP:
 		DoStop();
 		break;
+
+	case IDM_STOPPED:
+		OnStopped();
+		break;
 	}
 }
 
@@ -668,7 +720,7 @@ void CFrame::GetRenderWindowSize(int& x, int& y, int& width, int& height)
 
 void CFrame::OnRenderWindowSizeRequest(int width, int height)
 {
-	if (Core::GetState() == Core::CORE_UNINITIALIZED ||
+	if (!Core::IsRunning() ||
 			!SConfig::GetInstance().m_LocalCoreStartupParameter.bRenderWindowAutoSize ||
 			RendererIsFullscreen() || m_RenderFrame->IsMaximized())
 		return;
@@ -719,6 +771,19 @@ bool CFrame::RendererHasFocus()
 	}
 #endif
 	return false;
+}
+
+bool CFrame::UIHasFocus()
+{
+	// UIHasFocus should return true any time any one of our UI
+	// windows has the focus, including any dialogs or other windows.
+	//
+	// wxGetActiveWindow() returns the current wxWindow which has
+	// focus. If it's not one of our windows, then it will return
+	// null.
+
+	wxWindow *focusWindow = wxGetActiveWindow();
+	return (focusWindow != nullptr);
 }
 
 void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
@@ -775,7 +840,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 	}
 }
 
-bool IsHotkey(wxKeyEvent &event, int Id)
+static bool IsHotkey(wxKeyEvent &event, int Id)
 {
 	return (event.GetKeyCode() != WXK_NONE &&
 			event.GetKeyCode() == SConfig::GetInstance().m_LocalCoreStartupParameter.iHotkey[Id] &&
@@ -858,7 +923,17 @@ void OnAfterLoadCallback()
 	}
 }
 
-void TASManipFunction(SPADStatus *PadStatus, int controllerID)
+void OnStoppedCallback()
+{
+	// warning: this gets called from the EmuThread, so we should only queue things to do on the proper thread
+	if (main_frame)
+	{
+		wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_STOPPED);
+		main_frame->GetEventHandler()->AddPendingEvent(event);
+	}
+}
+
+void TASManipFunction(GCPadStatus* PadStatus, int controllerID)
 {
 	if (main_frame)
 		main_frame->g_TASInputDlg[controllerID]->GetValues(PadStatus, controllerID);
@@ -1045,8 +1120,7 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 
 void CFrame::OnKeyUp(wxKeyEvent& event)
 {
-	if(Core::GetState() != Core::CORE_UNINITIALIZED &&
-			(RendererHasFocus() || TASInputHasFocus()))
+	if(Core::IsRunning() && (RendererHasFocus() || TASInputHasFocus()))
 	{
 		if (IsHotkey(event, HK_TOGGLE_THROTTLE))
 		{

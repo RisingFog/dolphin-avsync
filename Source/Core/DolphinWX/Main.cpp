@@ -37,7 +37,9 @@
 #include "Common/Logging/LogManager.h"
 
 #include "Core/ConfigManager.h"
+#include "Core/Core.h"
 #include "Core/CoreParameter.h"
+#include "Core/Host.h"
 #include "Core/Movie.h"
 #include "Core/HW/Wiimote.h"
 
@@ -451,6 +453,7 @@ void DolphinApp::OnEndSession(wxCloseEvent& event)
 
 int DolphinApp::OnExit()
 {
+	Core::Shutdown();
 	WiimoteReal::Shutdown();
 	VideoBackend::ClearList();
 	SConfig::Shutdown();
@@ -673,6 +676,11 @@ void Host_SetWiiMoteConnectionState(int _State)
 	NOTICE_LOG(WIIMOTE, "%s", static_cast<const char*>(event.GetString().c_str()));
 
 	main_frame->GetEventHandler()->AddPendingEvent(event);
+}
+
+bool Host_UIHasFocus()
+{
+	return main_frame->UIHasFocus();
 }
 
 bool Host_RendererHasFocus()

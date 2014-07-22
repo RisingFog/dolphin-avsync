@@ -11,6 +11,7 @@
 #include "Core/CoreTiming.h"
 #include "Core/Movie.h"
 #include "Core/HW/EXI.h"
+#include "Core/HW/EXI_Channel.h"
 #include "Core/HW/EXI_Device.h"
 #include "Core/HW/EXI_DeviceMemoryCard.h"
 #include "Core/HW/GCMemcard.h"
@@ -18,6 +19,7 @@
 #include "Core/HW/GCMemcardRaw.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/Sram.h"
+#include "Core/HW/SystemTimers.h"
 #include "DiscIO/NANDContentLoader.h"
 
 #define MC_STATUS_BUSY              0x80
@@ -28,11 +30,16 @@
 #define MC_STATUS_READY             0x01
 #define SIZE_TO_Mb (1024 * 8 * 16)
 
+static const u32 MC_TRANSFER_RATE_READ = 512 * 1024;
+static const u32 MC_TRANSFER_RATE_WRITE = (u32)(96.125f * 1024.0f);
+
 void CEXIMemoryCard::FlushCallback(u64 userdata, int cyclesLate)
 {
 	// note that userdata is forbidden to be a pointer, due to the implementation of EventDoState
 	int card_index = (int)userdata;
 	CEXIMemoryCard* pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARD, card_index);
+	if (pThis == nullptr)
+		pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARDFOLDER, card_index);
 	if (pThis && pThis->memorycard)
 		pThis->memorycard->Flush();
 }
@@ -41,8 +48,20 @@ void CEXIMemoryCard::CmdDoneCallback(u64 userdata, int cyclesLate)
 {
 	int card_index = (int)userdata;
 	CEXIMemoryCard* pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARD, card_index);
+	if (pThis == nullptr)
+		pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARDFOLDER, card_index);
 	if (pThis)
 		pThis->CmdDone();
+}
+
+void CEXIMemoryCard::TransferCompleteCallback(u64 userdata, int cyclesLate)
+{
+	int card_index = (int)userdata;
+	CEXIMemoryCard* pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARD, card_index);
+	if (pThis == nullptr)
+		pThis = (CEXIMemoryCard*)ExpansionInterface::FindDevice(EXIDEVICE_MEMORYCARDFOLDER, card_index);
+	if (pThis)
+		pThis->TransferComplete();
 }
 
 CEXIMemoryCard::CEXIMemoryCard(const int index, bool gciFolder)
@@ -52,6 +71,7 @@ CEXIMemoryCard::CEXIMemoryCard(const int index, bool gciFolder)
 	// we're potentially leaking events here, since there's no UnregisterEvent until emu shutdown, but I guess it's inconsequential
 	et_this_card = CoreTiming::RegisterEvent((index == 0) ? "memcardFlushA" : "memcardFlushB", FlushCallback);
 	et_cmd_done = CoreTiming::RegisterEvent((index == 0) ? "memcardDoneA" : "memcardDoneB", CmdDoneCallback);
+	et_transfer_complete = CoreTiming::RegisterEvent((index == 0) ? "memcardTransferCompleteA" : "memcardTransferCompleteB", TransferCompleteCallback);
 
 	interruptSwitch = 0;
 	m_bInterruptSet = 0;
@@ -84,11 +104,11 @@ CEXIMemoryCard::CEXIMemoryCard(const int index, bool gciFolder)
 
 	if (gciFolder)
 	{
-		setupGciFolder(sizeMb);
+		SetupGciFolder(sizeMb);
 	}
 	else
 	{
-		setupRawMemcard(sizeMb);
+		SetupRawMemcard(sizeMb);
 	}
 
 	memory_card_size = memorycard->GetCardId() * SIZE_TO_Mb;
@@ -97,7 +117,7 @@ CEXIMemoryCard::CEXIMemoryCard(const int index, bool gciFolder)
 	SetCardFlashID(header, card_index);
 }
 
-void CEXIMemoryCard::setupGciFolder(u16 sizeMb)
+void CEXIMemoryCard::SetupGciFolder(u16 sizeMb)
 {
 
 	DiscIO::IVolume::ECountry CountryCode = DiscIO::IVolume::COUNTRY_UNKNOWN;
@@ -106,7 +126,7 @@ void CEXIMemoryCard::setupGciFolder(u16 sizeMb)
 	u32 CurrentGameId = 0;
 	if (strUniqueID == TITLEID_SYSMENU_STRING)
 	{
-		const DiscIO::INANDContentLoader & SysMenu_Loader = DiscIO::CNANDContentManager::Access().GetNANDLoader(TITLEID_SYSMENU, true);
+		const DiscIO::INANDContentLoader & SysMenu_Loader = DiscIO::CNANDContentManager::Access().GetNANDLoader(TITLEID_SYSMENU, false);
 		if (SysMenu_Loader.IsValid())
 		{
 			CountryCode = DiscIO::CountrySwitch(SysMenu_Loader.GetCountryChar());
@@ -159,13 +179,13 @@ void CEXIMemoryCard::setupGciFolder(u16 sizeMb)
 													  CountryCode, CurrentGameId);
 }
 
-void CEXIMemoryCard::setupRawMemcard(u16 sizeMb)
+void CEXIMemoryCard::SetupRawMemcard(u16 sizeMb)
 {
 	std::string filename =
 		(card_index == 0) ? SConfig::GetInstance().m_strMemoryCardA : SConfig::GetInstance().m_strMemoryCardB;
-	if (Movie::IsPlayingInput() && Movie::IsConfigSaved() && Movie::IsUsingMemcard() &&
+	if (Movie::IsPlayingInput() && Movie::IsConfigSaved() && Movie::IsUsingMemcard(card_index) &&
 		Movie::IsStartingFromClearSave())
-		filename = File::GetUserPath(D_GCUSER_IDX) + "Movie.raw";
+		filename = File::GetUserPath(D_GCUSER_IDX) + StringFromFormat("Movie%s.raw", (card_index == 0) ? "A" : "B");
 
 	if (sizeMb == MemCard251Mb)
 	{
@@ -178,7 +198,12 @@ CEXIMemoryCard::~CEXIMemoryCard()
 {
 	CoreTiming::RemoveEvent(et_this_card);
 	memorycard->Flush(true);
-	memorycard.release();
+	memorycard.reset();
+}
+
+bool CEXIMemoryCard::UseDelayedTransferCompletion()
+{
+	return true;
 }
 
 bool CEXIMemoryCard::IsPresent()
@@ -195,6 +220,12 @@ void CEXIMemoryCard::CmdDone()
 	m_bDirty = true;
 }
 
+void CEXIMemoryCard::TransferComplete()
+{
+	// Transfer complete, send interrupt
+	ExpansionInterface::GetChannel(card_index)->SendTransferComplete();
+}
+
 void CEXIMemoryCard::CmdDoneLater(u64 cycles)
 {
 	CoreTiming::RemoveEvent(et_cmd_done);
@@ -204,7 +235,7 @@ void CEXIMemoryCard::CmdDoneLater(u64 cycles)
 void CEXIMemoryCard::SetCS(int cs)
 {
 	// So that memory card won't be invalidated during flushing
-	memorycard->joinThread();
+	memorycard->JoinThread();
 
 	if (cs)  // not-selected to selected
 	{
@@ -253,11 +284,6 @@ void CEXIMemoryCard::SetCS(int cs)
 
 				CmdDoneLater(5000);
 			}
-
-			// Page written to memory card, not just to buffer - let's schedule a flush 0.5b cycles into the future (1 sec)
-			// But first we unschedule already scheduled flushes - no point in flushing once per page for a large write.
-			CoreTiming::RemoveEvent(et_this_card);
-			CoreTiming::ScheduleEvent(500000000, et_this_card, (u64)card_index);
 			break;
 		}
 	}
@@ -433,7 +459,7 @@ void CEXIMemoryCard::PauseAndLock(bool doLock, bool unpauseOnUnlock)
 	{
 		// we don't exactly have anything to pause,
 		// but let's make sure the flush thread isn't running.
-		memorycard->joinThread();
+		memorycard->JoinThread();
 	}
 }
 
@@ -474,6 +500,14 @@ IEXIDevice* CEXIMemoryCard::FindDevice(TEXIDevices device_type, int customIndex)
 void CEXIMemoryCard::DMARead(u32 _uAddr, u32 _uSize)
 {
 	memorycard->Read(address, _uSize, Memory::GetPointer(_uAddr));
+
+#ifdef _DEBUG
+	if ((address + _uSize) % BLOCK_SIZE == 0)
+		INFO_LOG(EXPANSIONINTERFACE, "reading from block: %x", address / BLOCK_SIZE);
+#endif
+
+	// Schedule transfer complete later based on read speed
+	CoreTiming::ScheduleEvent(_uSize * (SystemTimers::GetTicksPerSecond() / MC_TRANSFER_RATE_READ), et_transfer_complete, (u64)card_index);
 }
 
 // DMA write are preceded by all of the necessary setup via IMMWrite
@@ -481,4 +515,22 @@ void CEXIMemoryCard::DMARead(u32 _uAddr, u32 _uSize)
 void CEXIMemoryCard::DMAWrite(u32 _uAddr, u32 _uSize)
 {
 	memorycard->Write(address, _uSize, Memory::GetPointer(_uAddr));
+
+	// At the end of writing to a block flush to disk
+	// memory card blocks are always(?) written as a whole,
+	// but the dma calls are by page size (0x200) at a time
+	// just in case this is the last block that the game will be writing for a while
+	if (((address + _uSize) % BLOCK_SIZE) == 0)
+	{
+		INFO_LOG(EXPANSIONINTERFACE, "writing to block: %x", address / BLOCK_SIZE);
+		// Page written to memory card, not just to buffer - let's schedule a flush 0.5b cycles into the future (1 sec)
+		// But first we unschedule already scheduled flushes - no point in flushing once per page for a large write
+		// Scheduling event is mainly for raw memory cards as the flush the whole 16MB to disk
+		// Flushing the gci folder is free in comparison
+		CoreTiming::RemoveEvent(et_this_card);
+		CoreTiming::ScheduleEvent(500000000, et_this_card, (u64)card_index);
+	}
+
+	// Schedule transfer complete later based on write speed
+	CoreTiming::ScheduleEvent(_uSize * (SystemTimers::GetTicksPerSecond() / MC_TRANSFER_RATE_WRITE), et_transfer_complete, (u64)card_index);
 }

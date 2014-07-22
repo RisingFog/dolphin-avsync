@@ -42,6 +42,7 @@
 #include "DolphinWX/Frame.h"
 #include "DolphinWX/GameListCtrl.h"
 #include "DolphinWX/ISOFile.h"
+#include "DolphinWX/Main.h"
 #include "DolphinWX/NetWindow.h"
 #include "DolphinWX/WxUtils.h"
 
@@ -56,10 +57,9 @@ END_EVENT_TABLE()
 
 static NetPlayServer* netplay_server = nullptr;
 static NetPlayClient* netplay_client = nullptr;
-extern CFrame* main_frame;
 NetPlayDiag *NetPlayDiag::npd = nullptr;
 
-std::string BuildGameName(const GameListItem& game)
+static std::string BuildGameName(const GameListItem& game)
 {
 	// Lang needs to be consistent
 	auto const lang = 0;
@@ -74,7 +74,7 @@ std::string BuildGameName(const GameListItem& game)
 		return name + " (" + game.GetUniqueID() + ")";
 }
 
-void FillWithGameNames(wxListBox* game_lbox, const CGameListCtrl& game_list)
+static void FillWithGameNames(wxListBox* game_lbox, const CGameListCtrl& game_list)
 {
 	for (u32 i = 0 ; auto game = game_list.GetISO(i); ++i)
 		game_lbox->Append(StrToWxStr(BuildGameName(*game)));
@@ -428,14 +428,15 @@ NetPlayDiag::~NetPlayDiag()
 
 void NetPlayDiag::OnChat(wxCommandEvent&)
 {
-	wxString s = m_chat_msg_text->GetValue();
+	wxString text = m_chat_msg_text->GetValue();
 
-	if (s.Length())
+	if (!text.empty())
 	{
-		if (s.Length() > 2000)
-			s.erase(2000);
-		netplay_client->SendChatMessage(WxStrToStr(s));
-		m_chat_text->AppendText(s.Prepend(" >> ").Append('\n'));
+		if (text.length() > 2000)
+			text.erase(2000);
+
+		netplay_client->SendChatMessage(WxStrToStr(text));
+		m_chat_text->AppendText(text.Prepend(" >> ").Append('\n'));
 		m_chat_msg_text->Clear();
 	}
 }
@@ -557,11 +558,11 @@ void NetPlayDiag::OnThread(wxCommandEvent& event)
 	// remove ping from selection string, in case it has changed
 	selection.erase(selection.find_last_of("|") + 1);
 
-	if (selection.Length() > 0)
+	if (!selection.empty())
 	{
 		for (unsigned int i = 0; i < m_player_lbox->GetCount(); ++i)
 		{
-			if (selection == m_player_lbox->GetString(i).Mid(0, selection.Length()))
+			if (selection == m_player_lbox->GetString(i).Mid(0, selection.length()))
 			{
 				m_player_lbox->SetSelection(i);
 				break;

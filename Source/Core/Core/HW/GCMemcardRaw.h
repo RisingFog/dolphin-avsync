@@ -21,7 +21,7 @@ class MemoryCard : public MemoryCardBase
 {
 public:
 	MemoryCard(std::string filename, int _card_index, u16 sizeMb = MemCard2043Mb);
-	~MemoryCard() { Flush(true); }
+	~MemoryCard();
 	void Flush(bool exiting = false) override;
 
 	s32 Read(u32 address, s32 length, u8 *destaddress) override;
@@ -29,7 +29,7 @@ public:
 	void ClearBlock(u32 address) override;
 	void ClearAll() override;
 	void DoState(PointerWrap &p) override;
-	void joinThread() override;
+	void JoinThread() override;
 
 private:
 	u8 *memory_card_content;

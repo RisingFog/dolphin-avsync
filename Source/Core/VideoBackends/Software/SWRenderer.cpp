@@ -32,7 +32,7 @@ static std::string s_sScreenshotName;
 
 // Rasterfont isn't compatible with GLES
 // degasus: I think it does, but I can't test it
-RasterFont* s_pfont = nullptr;
+static RasterFont* s_pfont = nullptr;
 
 void SWRenderer::Init()
 {
@@ -52,7 +52,7 @@ void SWRenderer::Shutdown()
 	}
 }
 
-void CreateShaders()
+static void CreateShaders()
 {
 	static const char *fragShaderText =
 		"#ifdef GL_ES\n"
@@ -86,8 +86,8 @@ void CreateShaders()
 
 void SWRenderer::Prepare()
 {
-	s_xfbColorTexture[0] = new u8[640*568*4];
-	s_xfbColorTexture[1] = new u8[640*568*4];
+	s_xfbColorTexture[0] = new u8[MAX_XFB_WIDTH*MAX_XFB_HEIGHT*4];
+	s_xfbColorTexture[1] = new u8[MAX_XFB_WIDTH*MAX_XFB_HEIGHT*4];
 
 	s_currentColorTexture = 0;
 
@@ -152,8 +152,12 @@ void SWRenderer::DrawDebugText()
 	SWRenderer::RenderText(debugtext.c_str(), 20, 20, 0xFFFFFF00);
 }
 
-u8* SWRenderer::getColorTexture() {
+u8* SWRenderer::getNextColorTexture() {
 	return s_xfbColorTexture[!s_currentColorTexture];
+}
+
+u8* SWRenderer::getCurrentColorTexture() {
+	return s_xfbColorTexture[s_currentColorTexture];
 }
 
 void SWRenderer::swapColorTexture() {
@@ -162,13 +166,13 @@ void SWRenderer::swapColorTexture() {
 
 void SWRenderer::UpdateColorTexture(EfbInterface::yuv422_packed *xfb, u32 fbWidth, u32 fbHeight)
 {
-	if (fbWidth*fbHeight > 640*568) {
+	if (fbWidth*fbHeight > MAX_XFB_WIDTH*MAX_XFB_HEIGHT) {
 		ERROR_LOG(VIDEO, "Framebuffer is too large: %ix%i", fbWidth, fbHeight);
 		return;
 	}
 
 	u32 offset = 0;
-	u8 *TexturePointer = getColorTexture();
+	u8 *TexturePointer = getNextColorTexture();
 
 	for (u16 y = 0; y < fbHeight; y++)
 	{
@@ -182,14 +186,14 @@ void SWRenderer::UpdateColorTexture(EfbInterface::yuv422_packed *xfb, u32 fbWidt
 
 			// We do the inverse BT.601 conversion for YCbCr to RGB
 			// http://www.equasys.de/colorconversion.html#YCbCr-RGBColorFormatConversion
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y1              + 1.596f * V));
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y1 - 0.392f * U - 0.813f * V));
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y1 + 2.017f * U             ));
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y1              + 1.596f * V), 0, 255);
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y1 - 0.392f * U - 0.813f * V), 0, 255);
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y1 + 2.017f * U             ), 0, 255);
 			TexturePointer[offset++] = 255;
 
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y2              + 1.596f * V));
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y2 - 0.392f * U - 0.813f * V));
-			TexturePointer[offset++] = std::min<u8>(255.0f, std::max(0.0f, 1.164f * Y2 + 2.017f * U             ));
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y2              + 1.596f * V), 0, 255);
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y2 - 0.392f * U - 0.813f * V), 0, 255);
+			TexturePointer[offset++] = MathUtil::Clamp(int(1.164f * Y2 + 2.017f * U             ), 0, 255);
 			TexturePointer[offset++] = 255;
 		}
 		xfb += fbWidth;
@@ -202,7 +206,7 @@ void SWRenderer::Swap(u32 fbWidth, u32 fbHeight)
 {
 	GLInterface->Update(); // just updates the render window position and the backbuffer size
 	if (!g_SWVideoConfig.bHwRasterizer)
-		SWRenderer::DrawTexture(s_xfbColorTexture[s_currentColorTexture], fbWidth, fbHeight);
+		SWRenderer::DrawTexture(getCurrentColorTexture(), fbWidth, fbHeight);
 
 	swstats.frameCount++;
 	SWRenderer::SwapBuffer();

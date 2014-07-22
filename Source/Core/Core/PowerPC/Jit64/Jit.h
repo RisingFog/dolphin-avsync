@@ -174,6 +174,7 @@ public:
 	void fp_arith(UGeckoInstruction inst);
 
 	void fcmpx(UGeckoInstruction inst);
+	void fctiwx(UGeckoInstruction inst);
 	void fmrx(UGeckoInstruction inst);
 
 	void cmpXX(UGeckoInstruction inst);
@@ -190,6 +191,7 @@ public:
 
 	void fmaddXX(UGeckoInstruction inst);
 	void fsign(UGeckoInstruction inst);
+	void frsp(UGeckoInstruction inst);
 	void stX(UGeckoInstruction inst); //stw sth stb
 	void rlwinmx(UGeckoInstruction inst);
 	void rlwimix(UGeckoInstruction inst);

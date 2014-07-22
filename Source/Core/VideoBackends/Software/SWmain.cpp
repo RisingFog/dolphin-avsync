@@ -35,6 +35,7 @@
 #include "VideoBackends/Software/VideoConfigDialog.h"
 #endif // HAVE_WX
 
+#include "VideoCommon/Fifo.h"
 #include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/PixelEngine.h"
 #include "VideoCommon/XFMemory.h"
@@ -60,11 +61,6 @@ static std::mutex m_csSWVidOccupied;
 std::string VideoSoftware::GetName() const
 {
 	return _trans("Software Renderer");
-}
-
-void *DllDebugger(void *_hParent, bool Show)
-{
-	return nullptr;
 }
 
 void VideoSoftware::ShowConfig(void *_hParent)
@@ -243,6 +239,9 @@ void VideoSoftware::Video_EndField()
 	// If BypassXFB has already done a swap (cf. EfbCopy::CopyToXfb), skip this.
 	if (!g_SWVideoConfig.bBypassXFB)
 	{
+		// Dump frame if needed
+		DebugUtil::OnFrameEnd(s_beginFieldArgs.fbWidth, s_beginFieldArgs.fbHeight);
+
 		// If we are in dual core mode, notify the GPU thread about the new color texture.
 		if (SConfig::GetInstance().m_LocalCoreStartupParameter.bCPUThread)
 			Common::AtomicStoreRelease(s_swapRequested, true);

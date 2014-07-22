@@ -98,6 +98,9 @@ struct SConfig : NonCopyable
 	int m_Volume;
 	std::string sBackend;
 
+	// Input settings
+	bool m_BackgroundInput;
+
 	SysConf* m_SYSCONF;
 
 	// save settings
@@ -123,6 +126,7 @@ private:
 	void SaveGameListSettings(IniFile& ini);
 	void SaveCoreSettings(IniFile& ini);
 	void SaveDSPSettings(IniFile& ini);
+	void SaveInputSettings(IniFile& ini);
 	void SaveMovieSettings(IniFile& ini);
 	void SaveFifoPlayerSettings(IniFile& ini);
 
@@ -133,6 +137,7 @@ private:
 	void LoadGameListSettings(IniFile& ini);
 	void LoadCoreSettings(IniFile& ini);
 	void LoadDSPSettings(IniFile& ini);
+	void LoadInputSettings(IniFile& ini);
 	void LoadMovieSettings(IniFile& ini);
 	void LoadFifoPlayerSettings(IniFile& ini);
 

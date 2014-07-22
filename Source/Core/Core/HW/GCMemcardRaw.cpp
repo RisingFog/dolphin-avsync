@@ -7,7 +7,7 @@
 #define SIZE_TO_Mb (1024 * 8 * 16)
 #define MC_HDR_SIZE 0xA000
 
-void innerFlush(FlushData *data)
+static void innerFlush(FlushData *data)
 {
 	File::IOFile pFile(data->filename, "r+b");
 	if (!pFile)
@@ -69,7 +69,13 @@ MemoryCard::MemoryCard(std::string filename, int _card_index, u16 sizeMb)
 	}
 }
 
-void MemoryCard::joinThread()
+MemoryCard::~MemoryCard()
+{
+	Flush(true);
+	delete[] memory_card_content;
+}
+
+void MemoryCard::JoinThread()
 {
 	if (flushThread.joinable())
 	{
