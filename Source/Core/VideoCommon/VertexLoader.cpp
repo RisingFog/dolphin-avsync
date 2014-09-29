@@ -2,7 +2,7 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/MemoryUtil.h"
 #include "Common/StringUtil.h"
 #include "Common/x64ABI.h"
@@ -10,19 +10,14 @@
 
 #include "Core/Host.h"
 
-#include "VideoCommon/BPMemory.h"
 #include "VideoCommon/DataReader.h"
-#include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/LookUpTables.h"
 #include "VideoCommon/PixelEngine.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexLoader.h"
 #include "VideoCommon/VertexLoader_Color.h"
 #include "VideoCommon/VertexLoader_Normal.h"
 #include "VideoCommon/VertexLoader_Position.h"
 #include "VideoCommon/VertexLoader_TextCoord.h"
-#include "VideoCommon/VertexLoaderManager.h"
-#include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -30,8 +25,6 @@
 #include "VideoCommon/XFMemory.h"
 
 #define COMPILED_CODE_SIZE 4096
-
-NativeVertexFormat *g_nativeVertexFmt;
 
 #ifndef _WIN32
 	#undef inline
@@ -381,10 +374,41 @@ static void LOADERDECL UpdateBoundingBox()
 	{
 		m = (p1.x - p0.x) ? ((p1.y - p0.y) / (p1.x - p0.x)) : highNum;
 		c = p0.y - (m * p0.x);
-		if (i0 & 1) { s = (s32)(c + roundUp); if (s >= 0 && s <= 479) left = 0;   top = std::min(s, top);  bottom = std::max(s, bottom); }
-		if (i0 & 2) { s = (s32)((-c / m) + roundUp); if (s >= 0 && s <= 607) top = 0;   left = std::min(s, left); right = std::max(s, right); }
-		if (i0 & 4) { s = (s32)((m * 607) + c + roundUp); if (s >= 0 && s <= 479) right = 607; top = std::min(s, top);  bottom = std::max(s, bottom); }
-		if (i0 & 8) { s = (s32)(((479 - c) / m) + roundUp); if (s >= 0 && s <= 607) bottom = 479; left = std::min(s, left); right = std::max(s, right); }
+		if (i0 & 1)
+		{
+			s = (s32)(c + roundUp);
+			if (s >= 0 && s <= 479)
+				left = 0;
+			top = std::min(s, top);
+			bottom = std::max(s, bottom);
+		}
+
+		if (i0 & 2)
+		{
+			s = (s32)((-c / m) + roundUp);
+			if (s >= 0 && s <= 607)
+				top = 0;
+			left = std::min(s, left);
+			right = std::max(s, right);
+		}
+
+		if (i0 & 4)
+		{
+			s = (s32)((m * 607) + c + roundUp);
+			if (s >= 0 && s <= 479)
+				right = 607;
+			top = std::min(s, top);
+			bottom = std::max(s, bottom);
+		}
+
+		if (i0 & 8)
+		{
+			s = (s32)(((479 - c) / m) + roundUp);
+			if (s >= 0 && s <= 607)
+				bottom = 479;
+			left = std::min(s, left);
+			right = std::max(s, right);
+		}
 	}
 
 	// Only check other lines if we are dealing with a triangle
@@ -395,10 +419,41 @@ static void LOADERDECL UpdateBoundingBox()
 		{
 			m = (p2.x - p1.x) ? ((p2.y - p1.y) / (p2.x - p1.x)) : highNum;
 			c = p1.y - (m * p1.x);
-			if (i1 & 1) { s = (s32)(c + roundUp); if (s >= 0 && s <= 479) left = 0;   top = std::min(s, top);  bottom = std::max(s, bottom); }
-			if (i1 & 2) { s = (s32)((-c / m) + roundUp); if (s >= 0 && s <= 607) top = 0;   left = std::min(s, left); right = std::max(s, right); }
-			if (i1 & 4) { s = (s32)((m * 607) + c + roundUp); if (s >= 0 && s <= 479) right = 607; top = std::min(s, top);  bottom = std::max(s, bottom); }
-			if (i1 & 8) { s = (s32)(((479 - c) / m) + roundUp); if (s >= 0 && s <= 607) bottom = 479; left = std::min(s, left); right = std::max(s, right); }
+			if (i1 & 1)
+			{
+				s = (s32)(c + roundUp);
+				if (s >= 0 && s <= 479)
+					left = 0;
+				top = std::min(s, top);
+				bottom = std::max(s, bottom);
+			}
+
+			if (i1 & 2)
+			{
+				s = (s32)((-c / m) + roundUp);
+				if (s >= 0 && s <= 607)
+					top = 0;
+				left = std::min(s, left);
+				right = std::max(s, right);
+			}
+
+			if (i1 & 4)
+			{
+				s = (s32)((m * 607) + c + roundUp);
+				if (s >= 0 && s <= 479)
+					right = 607;
+				top = std::min(s, top);
+				bottom = std::max(s, bottom);
+			}
+
+			if (i1 & 8)
+			{
+				s = (s32)(((479 - c) / m) + roundUp);
+				if (s >= 0 && s <= 607)
+					bottom = 479;
+				left = std::min(s, left);
+				right = std::max(s, right);
+			}
 		}
 
 		// Third line intersects
@@ -406,10 +461,41 @@ static void LOADERDECL UpdateBoundingBox()
 		{
 			m = (p2.x - p0.x) ? ((p2.y - p0.y) / (p2.x - p0.x)) : highNum;
 			c = p0.y - (m * p0.x);
-			if (i2 & 1) { s = (s32)(c + roundUp); if (s >= 0 && s <= 479) left = 0;   top = std::min(s, top);  bottom = std::max(s, bottom); }
-			if (i2 & 2) { s = (s32)((-c / m) + roundUp); if (s >= 0 && s <= 607) top = 0;   left = std::min(s, left); right = std::max(s, right); }
-			if (i2 & 4) { s = (s32)((m * 607) + c + roundUp); if (s >= 0 && s <= 479) right = 607; top = std::min(s, top);  bottom = std::max(s, bottom); }
-			if (i2 & 8) { s = (s32)(((479 - c) / m) + roundUp); if (s >= 0 && s <= 607) bottom = 479; left = std::min(s, left); right = std::max(s, right); }
+			if (i2 & 1)
+			{
+				s = (s32)(c + roundUp);
+				if (s >= 0 && s <= 479)
+					left = 0;
+				top = std::min(s, top);
+				bottom = std::max(s, bottom);
+			}
+
+			if (i2 & 2)
+			{
+				s = (s32)((-c / m) + roundUp);
+				if (s >= 0 && s <= 607)
+					top = 0;
+				left = std::min(s, left);
+				right = std::max(s, right);
+			}
+
+			if (i2 & 4)
+			{
+				s = (s32)((m * 607) + c + roundUp);
+				if (s >= 0 && s <= 479)
+					right = 607;
+				top = std::min(s, top);
+				bottom = std::max(s, bottom);
+			}
+
+			if (i2 & 8)
+			{
+				s = (s32)(((479 - c) / m) + roundUp);
+				if (s >= 0 && s <= 607)
+					bottom = 479;
+				left = std::min(s, left);
+				right = std::max(s, right);
+			}
 		}
 	}
 
@@ -468,7 +554,7 @@ VertexLoader::VertexLoader(const TVtxDesc &vtx_desc, const VAT &vtx_attr)
 	VertexLoader_TextCoord::Init();
 
 	m_VtxDesc = vtx_desc;
-	SetVAT(vtx_attr.g0.Hex, vtx_attr.g1.Hex, vtx_attr.g2.Hex);
+	SetVAT(vtx_attr);
 
 	#ifdef USE_VERTEX_LOADER_JIT
 	AllocCodeSpace(COMPILED_CODE_SIZE);
@@ -498,7 +584,8 @@ void VertexLoader::CompileVertexTranslator()
 		PanicAlert("Trying to recompile a vertex translator");
 
 	m_compiledCode = GetCodePtr();
-	ABI_PushAllCalleeSavedRegsAndAdjustStack();
+	// We don't use any callee saved registers or anything but RAX.
+	ABI_PushRegistersAndAdjustStack(0, 8);
 
 	// Start loop here
 	const u8 *loop_start = GetCodePtr();
@@ -525,22 +612,18 @@ void VertexLoader::CompileVertexTranslator()
 #endif
 
 	// Colors
-	const u32 col[2] = {m_VtxDesc.Color0, m_VtxDesc.Color1};
+	const u64 col[2] = {m_VtxDesc.Color0, m_VtxDesc.Color1};
 	// TextureCoord
-	// Since m_VtxDesc.Text7Coord is broken across a 32 bit word boundary, retrieve its value manually.
-	// If we didn't do this, the vertex format would be read as one bit offset from where it should be, making
-	// 01 become 00, and 10/11 become 01
-	const u32 tc[8] = {
+	const u64 tc[8] = {
 		m_VtxDesc.Tex0Coord, m_VtxDesc.Tex1Coord, m_VtxDesc.Tex2Coord, m_VtxDesc.Tex3Coord,
-		m_VtxDesc.Tex4Coord, m_VtxDesc.Tex5Coord, m_VtxDesc.Tex6Coord, (const u32)((m_VtxDesc.Hex >> 31) & 3)
+		m_VtxDesc.Tex4Coord, m_VtxDesc.Tex5Coord, m_VtxDesc.Tex6Coord, m_VtxDesc.Tex7Coord
 	};
 
 	u32 components = 0;
 
 	// Position in pc vertex format.
 	int nat_offset = 0;
-	PortableVertexDeclaration vtx_decl;
-	memset(&vtx_decl, 0, sizeof(vtx_decl));
+	memset(&m_native_vtx_decl, 0, sizeof(m_native_vtx_decl));
 
 	// Position Matrix Index
 	if (m_VtxDesc.PosMatIdx)
@@ -572,11 +655,11 @@ void VertexLoader::CompileVertexTranslator()
 	}
 	m_VertexSize += VertexLoader_Position::GetSize(m_VtxDesc.Position, m_VtxAttr.PosFormat, m_VtxAttr.PosElements);
 	nat_offset += 12;
-	vtx_decl.position.components = 3;
-	vtx_decl.position.enable = true;
-	vtx_decl.position.offset = 0;
-	vtx_decl.position.type = VAR_FLOAT;
-	vtx_decl.position.integer = false;
+	m_native_vtx_decl.position.components = 3;
+	m_native_vtx_decl.position.enable = true;
+	m_native_vtx_decl.position.offset = 0;
+	m_native_vtx_decl.position.type = VAR_FLOAT;
+	m_native_vtx_decl.position.integer = false;
 
 	// Normals
 	if (m_VtxDesc.Normal != NOT_PRESENT)
@@ -591,18 +674,18 @@ void VertexLoader::CompileVertexTranslator()
 		{
 			Host_SysMessage(
 				StringFromFormat("VertexLoader_Normal::GetFunction(%i %i %i %i) returned zero!",
-				m_VtxDesc.Normal, m_VtxAttr.NormalFormat,
+				(u32)m_VtxDesc.Normal, m_VtxAttr.NormalFormat,
 				m_VtxAttr.NormalElements, m_VtxAttr.NormalIndex3).c_str());
 		}
 		WriteCall(pFunc);
 
 		for (int i = 0; i < (vtx_attr.NormalElements ? 3 : 1); i++)
 		{
-			vtx_decl.normals[i].components = 3;
-			vtx_decl.normals[i].enable = true;
-			vtx_decl.normals[i].offset = nat_offset;
-			vtx_decl.normals[i].type = VAR_FLOAT;
-			vtx_decl.normals[i].integer = false;
+			m_native_vtx_decl.normals[i].components = 3;
+			m_native_vtx_decl.normals[i].enable = true;
+			m_native_vtx_decl.normals[i].offset = nat_offset;
+			m_native_vtx_decl.normals[i].type = VAR_FLOAT;
+			m_native_vtx_decl.normals[i].integer = false;
 			nat_offset += 12;
 		}
 
@@ -613,9 +696,9 @@ void VertexLoader::CompileVertexTranslator()
 
 	for (int i = 0; i < 2; i++)
 	{
-		vtx_decl.colors[i].components = 4;
-		vtx_decl.colors[i].type = VAR_UNSIGNED_BYTE;
-		vtx_decl.colors[i].integer = false;
+		m_native_vtx_decl.colors[i].components = 4;
+		m_native_vtx_decl.colors[i].type = VAR_UNSIGNED_BYTE;
+		m_native_vtx_decl.colors[i].integer = false;
 		switch (col[i])
 		{
 		case NOT_PRESENT:
@@ -663,8 +746,8 @@ void VertexLoader::CompileVertexTranslator()
 		if (col[i] != NOT_PRESENT)
 		{
 			components |= VB_HAS_COL0 << i;
-			vtx_decl.colors[i].offset = nat_offset;
-			vtx_decl.colors[i].enable = true;
+			m_native_vtx_decl.colors[i].offset = nat_offset;
+			m_native_vtx_decl.colors[i].enable = true;
 			nat_offset += 4;
 		}
 	}
@@ -672,9 +755,9 @@ void VertexLoader::CompileVertexTranslator()
 	// Texture matrix indices (remove if corresponding texture coordinate isn't enabled)
 	for (int i = 0; i < 8; i++)
 	{
-		vtx_decl.texcoords[i].offset = nat_offset;
-		vtx_decl.texcoords[i].type = VAR_FLOAT;
-		vtx_decl.texcoords[i].integer = false;
+		m_native_vtx_decl.texcoords[i].offset = nat_offset;
+		m_native_vtx_decl.texcoords[i].type = VAR_FLOAT;
+		m_native_vtx_decl.texcoords[i].integer = false;
 
 		const int format = m_VtxAttr.texCoord[i].Format;
 		const int elements = m_VtxAttr.texCoord[i].Elements;
@@ -685,7 +768,7 @@ void VertexLoader::CompileVertexTranslator()
 		}
 		else
 		{
-			_assert_msg_(VIDEO, DIRECT <= tc[i] && tc[i] <= INDEX16, "Invalid texture coordinates!\n(tc[i] = %d)", tc[i]);
+			_assert_msg_(VIDEO, DIRECT <= tc[i] && tc[i] <= INDEX16, "Invalid texture coordinates!\n(tc[i] = %d)", (u32)tc[i]);
 			_assert_msg_(VIDEO, FORMAT_UBYTE <= format && format <= FORMAT_FLOAT, "Invalid texture coordinates format!\n(format = %d)", format);
 			_assert_msg_(VIDEO, 0 <= elements && elements <= 1, "Invalid number of texture coordinates elements!\n(elements = %d)", elements);
 
@@ -696,18 +779,18 @@ void VertexLoader::CompileVertexTranslator()
 
 		if (components & (VB_HAS_TEXMTXIDX0 << i))
 		{
-			vtx_decl.texcoords[i].enable = true;
+			m_native_vtx_decl.texcoords[i].enable = true;
 			if (tc[i] != NOT_PRESENT)
 			{
 				// if texmtx is included, texcoord will always be 3 floats, z will be the texmtx index
-				vtx_decl.texcoords[i].components = 3;
+				m_native_vtx_decl.texcoords[i].components = 3;
 				nat_offset += 12;
 				WriteCall(m_VtxAttr.texCoord[i].Elements ? TexMtx_Write_Float : TexMtx_Write_Float2);
 			}
 			else
 			{
 				components |= VB_HAS_UV0 << i; // have to include since using now
-				vtx_decl.texcoords[i].components = 4;
+				m_native_vtx_decl.texcoords[i].components = 4;
 				nat_offset += 16; // still include the texture coordinate, but this time as 6 + 2 bytes
 				WriteCall(TexMtx_Write_Float4);
 			}
@@ -716,8 +799,8 @@ void VertexLoader::CompileVertexTranslator()
 		{
 			if (tc[i] != NOT_PRESENT)
 			{
-				vtx_decl.texcoords[i].enable = true;
-				vtx_decl.texcoords[i].components = vtx_attr.texCoord[i].Elements ? 2 : 1;
+				m_native_vtx_decl.texcoords[i].enable = true;
+				m_native_vtx_decl.texcoords[i].components = vtx_attr.texCoord[i].Elements ? 2 : 1;
 				nat_offset += 4 * (vtx_attr.texCoord[i].Elements ? 2 : 1);
 			}
 		}
@@ -746,42 +829,33 @@ void VertexLoader::CompileVertexTranslator()
 	if (m_VtxDesc.PosMatIdx)
 	{
 		WriteCall(PosMtx_Write);
-		vtx_decl.posmtx.components = 4;
-		vtx_decl.posmtx.enable = true;
-		vtx_decl.posmtx.offset = nat_offset;
-		vtx_decl.posmtx.type = VAR_UNSIGNED_BYTE;
-		vtx_decl.posmtx.integer = true;
+		m_native_vtx_decl.posmtx.components = 4;
+		m_native_vtx_decl.posmtx.enable = true;
+		m_native_vtx_decl.posmtx.offset = nat_offset;
+		m_native_vtx_decl.posmtx.type = VAR_UNSIGNED_BYTE;
+		m_native_vtx_decl.posmtx.integer = true;
 		nat_offset += 4;
 	}
 
-	native_stride = nat_offset;
-	vtx_decl.stride = native_stride;
+	m_native_components = components;
+	m_native_vtx_decl.stride = nat_offset;
 
 #ifdef USE_VERTEX_LOADER_JIT
 	// End loop here
-#if _M_X86_64
 	MOV(64, R(RAX), Imm64((u64)&loop_counter));
 	SUB(32, MatR(RAX), Imm8(1));
-#else
-	SUB(32, M(&loop_counter), Imm8(1));
-#endif
 
 	J_CC(CC_NZ, loop_start);
-	ABI_PopAllCalleeSavedRegsAndAdjustStack();
+	ABI_PopRegistersAndAdjustStack(0, 8);
 	RET();
 #endif
-	m_NativeFmt = VertexLoaderManager::GetNativeVertexFormat(vtx_decl, components);
 }
 
 void VertexLoader::WriteCall(TPipelineFunction func)
 {
 #ifdef USE_VERTEX_LOADER_JIT
-#if _M_X86_64
 	MOV(64, R(RAX), Imm64((u64)func));
 	CALLptr(R(RAX));
-#else
-	CALL((void*)func);
-#endif
 #else
 	m_PipelineStages[m_numPipelineStages++] = func;
 #endif
@@ -791,53 +865,37 @@ void VertexLoader::WriteCall(TPipelineFunction func)
 void VertexLoader::WriteGetVariable(int bits, OpArg dest, void *address)
 {
 #ifdef USE_VERTEX_LOADER_JIT
-#if _M_X86_64
 	MOV(64, R(RAX), Imm64((u64)address));
 	MOV(bits, dest, MatR(RAX));
-#else
-	MOV(bits, dest, M(address));
-#endif
 #endif
 }
 
 void VertexLoader::WriteSetVariable(int bits, void *address, OpArg value)
 {
 #ifdef USE_VERTEX_LOADER_JIT
-#if _M_X86_64
 	MOV(64, R(RAX), Imm64((u64)address));
 	MOV(bits, MatR(RAX), value);
-#else
-	MOV(bits, M(address), value);
-#endif
 #endif
 }
 #endif
 
-void VertexLoader::SetupRunVertices(int vtx_attr_group, int primitive, int const count)
+void VertexLoader::SetupRunVertices(const VAT& vat, int primitive, int const count)
 {
 	m_numLoadedVertices += count;
 
-	// Flush if our vertex format is different from the currently set.
-	if (g_nativeVertexFmt != nullptr && g_nativeVertexFmt != m_NativeFmt)
-	{
-		VertexManager::Flush();
-		// Also move the Set() here?
-	}
-	g_nativeVertexFmt = m_NativeFmt;
-
 	// Load position and texcoord scale factors.
-	m_VtxAttr.PosFrac          = g_VtxAttr[vtx_attr_group].g0.PosFrac;
-	m_VtxAttr.texCoord[0].Frac = g_VtxAttr[vtx_attr_group].g0.Tex0Frac;
-	m_VtxAttr.texCoord[1].Frac = g_VtxAttr[vtx_attr_group].g1.Tex1Frac;
-	m_VtxAttr.texCoord[2].Frac = g_VtxAttr[vtx_attr_group].g1.Tex2Frac;
-	m_VtxAttr.texCoord[3].Frac = g_VtxAttr[vtx_attr_group].g1.Tex3Frac;
-	m_VtxAttr.texCoord[4].Frac = g_VtxAttr[vtx_attr_group].g2.Tex4Frac;
-	m_VtxAttr.texCoord[5].Frac = g_VtxAttr[vtx_attr_group].g2.Tex5Frac;
-	m_VtxAttr.texCoord[6].Frac = g_VtxAttr[vtx_attr_group].g2.Tex6Frac;
-	m_VtxAttr.texCoord[7].Frac = g_VtxAttr[vtx_attr_group].g2.Tex7Frac;
+	m_VtxAttr.PosFrac          = vat.g0.PosFrac;
+	m_VtxAttr.texCoord[0].Frac = vat.g0.Tex0Frac;
+	m_VtxAttr.texCoord[1].Frac = vat.g1.Tex1Frac;
+	m_VtxAttr.texCoord[2].Frac = vat.g1.Tex2Frac;
+	m_VtxAttr.texCoord[3].Frac = vat.g1.Tex3Frac;
+	m_VtxAttr.texCoord[4].Frac = vat.g2.Tex4Frac;
+	m_VtxAttr.texCoord[5].Frac = vat.g2.Tex5Frac;
+	m_VtxAttr.texCoord[6].Frac = vat.g2.Tex6Frac;
+	m_VtxAttr.texCoord[7].Frac = vat.g2.Tex7Frac;
 
 	posScale = fractionTable[m_VtxAttr.PosFrac];
-	if (m_NativeFmt->m_components & VB_HAS_UVALL)
+	if (m_native_components & VB_HAS_UVALL)
 		for (int i = 0; i < 8; i++)
 			tcScale[i] = fractionTable[m_VtxAttr.texCoord[i].Frac];
 	for (int i = 0; i < 2; i++)
@@ -870,30 +928,14 @@ void VertexLoader::ConvertVertices ( int count )
 #endif
 }
 
-void VertexLoader::RunVertices(int vtx_attr_group, int primitive, int const count)
+void VertexLoader::RunVertices(const VAT& vat, int primitive, int const count)
 {
-	if (bpmem.genMode.cullmode == 3 && primitive < 5)
-	{
-		// if cull mode is none, ignore triangles and quads
-		DataSkip(count * m_VertexSize);
-		return;
-	}
-	SetupRunVertices(vtx_attr_group, primitive, count);
-	VertexManager::PrepareForAdditionalData(primitive, count, native_stride);
+	SetupRunVertices(vat, primitive, count);
 	ConvertVertices(count);
-	IndexGenerator::AddIndices(primitive, count);
-
-	ADDSTAT(stats.thisFrame.numPrims, count);
-	INCSTAT(stats.thisFrame.numPrimitiveJoins);
 }
 
-void VertexLoader::SetVAT(u32 _group0, u32 _group1, u32 _group2)
+void VertexLoader::SetVAT(const VAT& vat)
 {
-	VAT vat;
-	vat.g0.Hex = _group0;
-	vat.g1.Hex = _group1;
-	vat.g2.Hex = _group2;
-
 	m_VtxAttr.PosElements          = vat.g0.PosElements;
 	m_VtxAttr.PosFormat            = vat.g0.PosFormat;
 	m_VtxAttr.PosFrac              = vat.g0.PosFrac;
@@ -932,7 +974,8 @@ void VertexLoader::SetVAT(u32 _group0, u32 _group1, u32 _group2)
 	m_VtxAttr.texCoord[7].Format   = vat.g2.Tex7CoordFormat;
 	m_VtxAttr.texCoord[7].Frac     = vat.g2.Tex7Frac;
 
-	if (!m_VtxAttr.ByteDequant) {
+	if (!m_VtxAttr.ByteDequant)
+	{
 		ERROR_LOG(VIDEO, "ByteDequant is set to zero");
 	}
 };
@@ -961,7 +1004,7 @@ void VertexLoader::AppendToString(std::string *dest) const
 	};
 
 	dest->append(StringFromFormat("%ib skin: %i P: %i %s-%s ",
-		m_VertexSize, m_VtxDesc.PosMatIdx,
+		m_VertexSize, (u32)m_VtxDesc.PosMatIdx,
 		m_VtxAttr.PosElements ? 3 : 2, posMode[m_VtxDesc.Position], posFormats[m_VtxAttr.PosFormat]));
 
 	if (m_VtxDesc.Normal)
@@ -970,7 +1013,7 @@ void VertexLoader::AppendToString(std::string *dest) const
 			m_VtxAttr.NormalElements, posMode[m_VtxDesc.Normal], posFormats[m_VtxAttr.NormalFormat]));
 	}
 
-	u32 color_mode[2] = {m_VtxDesc.Color0, m_VtxDesc.Color1};
+	u64 color_mode[2] = {m_VtxDesc.Color0, m_VtxDesc.Color1};
 	for (int i = 0; i < 2; i++)
 	{
 		if (color_mode[i])
@@ -978,7 +1021,7 @@ void VertexLoader::AppendToString(std::string *dest) const
 			dest->append(StringFromFormat("C%i: %i %s-%s ", i, m_VtxAttr.color[i].Elements, posMode[color_mode[i]], colorFormat[m_VtxAttr.color[i].Comp]));
 		}
 	}
-	u32 tex_mode[8] = {
+	u64 tex_mode[8] = {
 		m_VtxDesc.Tex0Coord, m_VtxDesc.Tex1Coord, m_VtxDesc.Tex2Coord, m_VtxDesc.Tex3Coord,
 		m_VtxDesc.Tex4Coord, m_VtxDesc.Tex5Coord, m_VtxDesc.Tex6Coord, m_VtxDesc.Tex7Coord
 	};

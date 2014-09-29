@@ -7,8 +7,10 @@
 #include <wx/chartype.h>
 #include <wx/gdicmn.h>
 #include <wx/image.h>
+#include <wx/msgdlg.h>
 #include <wx/mstream.h>
 #include <wx/string.h>
+#include <wx/toolbar.h>
 #include <wx/utils.h>
 
 #include "DolphinWX/WxUtils.h"
@@ -51,6 +53,11 @@ void Explore(const std::string& path)
 	}
 }
 
+void ShowErrorDialog(const wxString& error_msg)
+{
+	wxMessageBox(error_msg, _("Error"), wxOK | wxICON_ERROR);
+}
+
 double GetCurrentBitmapLogicalScale()
 {
 #ifdef __APPLE__
@@ -67,6 +74,19 @@ wxBitmap _wxGetBitmapFromMemory(const unsigned char* data, int length)
 {
 	wxMemoryInputStream is(data, length);
 	return(wxBitmap(wxImage(is, wxBITMAP_TYPE_ANY, -1), -1));
+}
+
+wxBitmap CreateDisabledButtonBitmap(const wxBitmap& original)
+{
+	wxImage image = original.ConvertToImage();
+	return wxBitmap(image.ConvertToDisabled(240));
+}
+
+void AddToolbarButton(wxToolBar* toolbar, int toolID, const wxString& label, const wxBitmap& bitmap, const wxString& shortHelp)
+{
+	// Must explicitly set the disabled button bitmap because wxWidgets
+	// incorrectly desaturates it instead of lightening it.
+	toolbar->AddTool(toolID, label, bitmap, WxUtils::CreateDisabledButtonBitmap(bitmap), wxITEM_NORMAL, shortHelp);
 }
 
 }  // namespace

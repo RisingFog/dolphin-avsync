@@ -7,7 +7,7 @@
 #include <string>
 
 #include "Common/BitField.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 
 #pragma pack(4)
 
@@ -80,8 +80,8 @@
 #define BPMEM_TX_SETTLUT_4      0xB8 // 0xB8 + 4
 #define BPMEM_TEV_COLOR_ENV     0xC0 // 0xC0 + (2 * 16)
 #define BPMEM_TEV_ALPHA_ENV     0xC1 // 0xC1 + (2 * 16)
-#define BPMEM_TEV_REGISTER_L    0xE0 // 0xE0 + (2 * 4)
-#define BPMEM_TEV_REGISTER_H    0xE1 // 0xE1 + (2 * 4)
+#define BPMEM_TEV_COLOR_RA      0xE0 // 0xE0 + (2 * 4)
+#define BPMEM_TEV_COLOR_BG      0xE1 // 0xE1 + (2 * 4)
 #define BPMEM_FOGRANGE          0xE8 // 0xE8 + 6
 #define BPMEM_FOGPARAM0         0xEE
 #define BPMEM_FOGBMAGNITUDE     0xEF
@@ -550,7 +550,7 @@ union GenMode
 	BitField<10,4,u32> numtevstages;
 	BitField<14,2,CullMode> cullmode;
 	BitField<16,3,u32> numindstages;
-	BitField<19,5,u32> zfreeze;
+	BitField<19,1,u32> zfreeze;
 
 	u32 hex;
 };
@@ -853,6 +853,8 @@ union TevReg
 	BitField< 0, 32,u64> low;
 	BitField<32, 32,u64> high;
 
+	// TODO: Check if Konst uses all 11 bits or just 8
+
 	// Low register
 	BitField< 0,11,s64> red;
 
@@ -972,7 +974,8 @@ union UPE_Copy
 	BitField<15,1,u32> intensity_fmt;        // if set, is an intensity format (I4,I8,IA4,IA8)
 	BitField<16,1,u32> auto_conv;            // if 0 automatic color conversion by texture format and pixel type
 
-	u32 tp_realFormat() {
+	u32 tp_realFormat()
+	{
 		return target_pixel_format / 2 + (target_pixel_format & 1) * 8;
 	}
 };

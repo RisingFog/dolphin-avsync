@@ -24,7 +24,7 @@
 #include <wx/windowid.h>
 #include <wx/wxcrtvararg.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
@@ -44,7 +44,7 @@ class DebugInterface;
 
 enum
 {
-	IDM_MEM_ADDRBOX = 350,
+	IDM_MEM_ADDRBOX,
 	IDM_SYMBOLLIST,
 	IDM_SETVALBUTTON,
 	IDM_DUMP_MEMORY,
@@ -160,6 +160,12 @@ void CMemoryWindow::JumpToAddress(u32 _Address)
 
 void CMemoryWindow::SetMemoryValue(wxCommandEvent& event)
 {
+	if (!Memory::IsInitialized())
+	{
+		WxUtils::ShowErrorDialog(_("Cannot set uninitialized memory."));
+		return;
+	}
+
 	std::string str_addr = WxStrToStr(addrbox->GetValue());
 	std::string str_val = WxStrToStr(valbox->GetValue());
 	u32 addr;
@@ -167,13 +173,13 @@ void CMemoryWindow::SetMemoryValue(wxCommandEvent& event)
 
 	if (!TryParse(std::string("0x") + str_addr, &addr))
 	{
-		PanicAlertT("Invalid Address: %s", str_addr.c_str());
+		WxUtils::ShowErrorDialog(wxString::Format(_("Invalid address: %s"), str_addr.c_str()));
 		return;
 	}
 
 	if (!TryParse(std::string("0x") + str_val, &val))
 	{
-		PanicAlertT("Invalid Value: %s", str_val.c_str());
+		WxUtils::ShowErrorDialog(wxString::Format(_("Invalid value: %s"), str_val.c_str()));
 		return;
 	}
 

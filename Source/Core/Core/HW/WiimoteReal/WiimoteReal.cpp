@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <queue>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 #include "Common/Timer.h"
@@ -158,7 +158,7 @@ void Wiimote::InterruptChannel(const u16 channel, const void* const _data, const
 
 	auto const data = static_cast<const u8*>(_data);
 	Report rpt(data, data + size);
-	WiimoteEmu::Wiimote *const wm = (WiimoteEmu::Wiimote*)::Wiimote::GetPlugin()->controllers[index];
+	WiimoteEmu::Wiimote *const wm = (WiimoteEmu::Wiimote*)::Wiimote::GetConfig()->controllers[index];
 
 	// Convert output DATA packets to SET_REPORT packets.
 	// Nintendo Wiimotes work without this translation, but 3rd
@@ -200,14 +200,14 @@ bool Wiimote::Read()
 
 	if (result > 0 && m_channel > 0)
 	{
-		if (Core::g_CoreStartupParameter.iBBDumpPort > 0 &&
+		if (SConfig::GetInstance().m_LocalCoreStartupParameter.iBBDumpPort > 0 &&
 		    index == WIIMOTE_BALANCE_BOARD)
 		{
 			static sf::SocketUDP Socket;
 			Socket.Send((char*)rpt.data(),
 			            rpt.size(),
 			            sf::IPAddress::LocalHost,
-		                Core::g_CoreStartupParameter.iBBDumpPort);
+		                SConfig::GetInstance().m_LocalCoreStartupParameter.iBBDumpPort);
 		}
 
 		// Add it to queue
@@ -234,10 +234,10 @@ bool Wiimote::Write()
 
 		if (!is_speaker_data || m_last_audio_report.GetTimeDifference() > 5)
 		{
-			if (Core::g_CoreStartupParameter.iBBDumpPort > 0 && index == WIIMOTE_BALANCE_BOARD)
+			if (SConfig::GetInstance().m_LocalCoreStartupParameter.iBBDumpPort > 0 && index == WIIMOTE_BALANCE_BOARD)
 			{
 				static sf::SocketUDP Socket;
-				Socket.Send((char*)rpt.data(), rpt.size(), sf::IPAddress::LocalHost, Core::g_CoreStartupParameter.iBBDumpPort);
+				Socket.Send((char*)rpt.data(), rpt.size(), sf::IPAddress::LocalHost, SConfig::GetInstance().m_LocalCoreStartupParameter.iBBDumpPort);
 			}
 			IOWrite(rpt.data(), rpt.size());
 
@@ -347,7 +347,7 @@ void Wiimote::EmuStop()
 
 void Wiimote::EmuResume()
 {
-	WiimoteEmu::Wiimote *const wm = (WiimoteEmu::Wiimote*)::Wiimote::GetPlugin()->controllers[index];
+	WiimoteEmu::Wiimote *const wm = (WiimoteEmu::Wiimote*)::Wiimote::GetConfig()->controllers[index];
 
 	m_last_input_report.clear();
 
@@ -418,7 +418,7 @@ void WiimoteScanner::StartScanning()
 	if (!m_run_thread)
 	{
 		m_run_thread = true;
-		m_scan_thread = std::thread(std::mem_fn(&WiimoteScanner::ThreadFunc), this);
+		m_scan_thread = std::thread(&WiimoteScanner::ThreadFunc, this);
 	}
 }
 
@@ -491,7 +491,7 @@ bool Wiimote::Connect()
 void Wiimote::StartThread()
 {
 	m_run_thread = true;
-	m_wiimote_thread = std::thread(std::mem_fn(&Wiimote::ThreadFunc), this);
+	m_wiimote_thread = std::thread(&Wiimote::ThreadFunc, this);
 }
 
 void Wiimote::StopThread()
@@ -617,7 +617,7 @@ void Initialize(bool wait)
 }
 
 // called on emulation shutdown
-void Stop(void)
+void Stop()
 {
 	for (auto& wiimote : g_wiimotes)
 		if (wiimote && wiimote->IsConnected())
@@ -625,7 +625,7 @@ void Stop(void)
 }
 
 // called when the dolphin app exits
-void Shutdown(void)
+void Shutdown()
 {
 	g_wiimote_scanner.StopScanning();
 

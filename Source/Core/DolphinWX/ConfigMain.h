@@ -89,7 +89,6 @@ private:
 		ID_ENABLE_HLE_AUDIO,
 		ID_ENABLE_THROTTLE,
 		ID_DUMP_AUDIO,
-		ID_DUMP_AUDIO_TO_AVI,
 		ID_DPL2DECODER,
 		ID_LATENCY,
 		ID_BACKEND,
@@ -166,7 +165,6 @@ private:
 	wxStaticText* VolumeText;
 	wxCheckBox* DumpAudio;
 	wxCheckBox* DPL2Decoder;
-	wxCheckBox* DumpAudioToAVI;
 	wxArrayString wxArrayBackends;
 	wxChoice*   BackendSelection;
 	wxSpinCtrl* Latency;

@@ -5,10 +5,6 @@
 #include "Common/Thread.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 
-#if USE_EGL
-#include "DolphinWX/GLInterface/GLInterface.h"
-#endif
-
 #ifdef CIFACE_USE_XINPUT
 	#include "InputCommon/ControllerInterface/XInput/XInput.h"
 #endif
@@ -57,16 +53,10 @@ void ControllerInterface::Initialize()
 	ciface::XInput::Init(m_devices);
 #endif
 #ifdef CIFACE_USE_XLIB
-#if USE_EGL
-if (GLWin.platform == EGL_PLATFORM_X11) {
-#endif
 	ciface::Xlib::Init(m_devices, m_hwnd);
 	#ifdef CIFACE_USE_X11_XINPUT2
-		ciface::XInput2::Init(m_devices, m_hwnd);
+	ciface::XInput2::Init(m_devices, m_hwnd);
 	#endif
-#if USE_EGL
-}
-#endif
 #endif
 #ifdef CIFACE_USE_OSX
 	ciface::OSX::Init(m_devices, m_hwnd);
@@ -91,10 +81,10 @@ void ControllerInterface::Shutdown()
 	if (!m_is_init)
 		return;
 
-	for (Device* d : m_devices)
+	for (ciface::Core::Device* d : m_devices)
 	{
 		// Set outputs to ZERO before destroying device
-		for (Device::Output* o : d->Outputs())
+		for (ciface::Core::Device::Output* o : d->Outputs())
 			o->SetState(0);
 
 		// Update output
@@ -155,7 +145,7 @@ bool ControllerInterface::UpdateInput(const bool force)
 
 	size_t ok_count = 0;
 
-	for (Device* d : m_devices)
+	for (ciface::Core::Device* d : m_devices)
 	{
 		if (d->UpdateInput())
 			++ok_count;
@@ -183,7 +173,7 @@ bool ControllerInterface::UpdateOutput(const bool force)
 
 	size_t ok_count = 0;
 
-	for (Device* d : m_devices)
+	for (ciface::Core::Device* d : m_devices)
 	{
 		if (d->UpdateOutput())
 			++ok_count;
@@ -227,7 +217,7 @@ ControlState ControllerInterface::OutputReference::State(const ControlState stat
 // need to call this to re-parse a control reference's expression after changing it
 //
 void ControllerInterface::UpdateReference(ControllerInterface::ControlReference* ref
-	, const DeviceQualifier& default_device) const
+	, const ciface::Core::DeviceQualifier& default_device) const
 {
 	delete ref->parsed_expression;
 	ref->parsed_expression = nullptr;
@@ -246,7 +236,7 @@ void ControllerInterface::UpdateReference(ControllerInterface::ControlReference*
 // upon input, return pointer to detected Control
 // else return nullptr
 //
-Device::Control* ControllerInterface::InputReference::Detect(const unsigned int ms, Device* const device)
+ciface::Core::Device::Control* ControllerInterface::InputReference::Detect(const unsigned int ms, ciface::Core::Device* const device)
 {
 	unsigned int time = 0;
 	std::vector<bool> states(device->Inputs().size());
@@ -256,7 +246,7 @@ Device::Control* ControllerInterface::InputReference::Detect(const unsigned int 
 
 	// get starting state of all inputs,
 	// so we can ignore those that were activated at time of Detect start
-	std::vector<Device::Input*>::const_iterator
+	std::vector<ciface::Core::Device::Input*>::const_iterator
 		i = device->Inputs().begin(),
 		e = device->Inputs().end();
 	for (std::vector<bool>::iterator state = states.begin(); i != e; ++i)
@@ -296,7 +286,7 @@ Device::Control* ControllerInterface::InputReference::Detect(const unsigned int 
 //
 // set all binded outputs to <range> power for x milliseconds return false
 //
-Device::Control* ControllerInterface::OutputReference::Detect(const unsigned int ms, Device* const device)
+ciface::Core::Device::Control* ControllerInterface::OutputReference::Detect(const unsigned int ms, ciface::Core::Device* const device)
 {
 	// ignore device
 

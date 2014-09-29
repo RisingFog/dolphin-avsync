@@ -9,7 +9,7 @@
 
 #include <polarssl/aes.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 
 #include "DiscIO/Blob.h"
@@ -31,14 +31,6 @@ enum EDiscType
 	DISC_TYPE_GC,
 	DISC_TYPE_WAD
 };
-
-#ifndef _WIN32
-struct SPartition
-{
-	u64 Offset;
-	u32 Type;
-}; //gcc 4.3 cries if it's local
-#endif
 
 class CBlobBigEndianReader
 {
@@ -102,7 +94,6 @@ IVolume* CreateVolumeFromFilename(const std::string& _rFilename, u32 _PartitionG
 
 			return pVolume;
 		}
-			break;
 
 		case DISC_TYPE_UNK:
 		default:
@@ -112,10 +103,8 @@ IVolume* CreateVolumeFromFilename(const std::string& _rFilename, u32 _PartitionG
 			NOTICE_LOG(DISCIO, "%s does not have the Magic word for a gcm, wiidisc or wad file\n"
 						"Set Log Verbosity to Warning and attempt to load the game again to view the values", Filename.c_str());
 			delete pReader;
-			return nullptr;
 	}
 
-	// unreachable code
 	return nullptr;
 }
 
@@ -155,13 +144,12 @@ static IVolume* CreateVolumeFromCryptedWiiImage(IBlobReader& _rReader, u32 _Part
 	if ((int)_VolumeNum != -1 && _VolumeNum > numPartitions)
 		return nullptr;
 
-	#ifdef _WIN32
 	struct SPartition
 	{
 		u64 Offset;
 		u32 Type;
 	};
-	#endif
+
 	struct SPartitionGroup
 	{
 		u32 numPartitions;

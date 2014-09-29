@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include <mutex>
 #include <string>
 
 #include "AudioCommon/WaveFile.h"
-#include "Common/StdMutex.h"
 
 // 16 bit Stereo
 #define MAX_SAMPLES     (1024 * 2) // 64ms
@@ -24,9 +24,9 @@ public:
 	CMixer(unsigned int BackendSampleRate)
 		: m_dma_mixer(this, 32000)
 		, m_streaming_mixer(this, 48000)
+		, m_wiimote_speaker_mixer(this, 3000)
 		, m_sampleRate(BackendSampleRate)
 		, m_logAudio(0)
-		, m_throttle(false)
 		, m_speed(0)
 	{
 		INFO_LOG(AUDIO_INTERFACE, "Mixer is initialized");
@@ -40,11 +40,13 @@ public:
 	// Called from main thread
 	virtual void PushSamples(const short* samples, unsigned int num_samples);
 	virtual void PushStreamingSamples(const short* samples, unsigned int num_samples);
+	virtual void PushWiimoteSpeakerSamples(const short* samples, unsigned int num_samples, unsigned int sample_rate);
 	unsigned int GetSampleRate() const { return m_sampleRate; }
+
+	void SetDMAInputSampleRate(unsigned int rate);
+	void SetStreamInputSampleRate(unsigned int rate);
 	void SetStreamingVolume(unsigned int lvolume, unsigned int rvolume);
-
-	void SetThrottle(bool use) { m_throttle = use;}
-
+	void SetWiimoteSpeakerVolume(unsigned int lvolume, unsigned int rvolume);
 
 	virtual void StartLogAudio(const std::string& filename)
 	{
@@ -97,6 +99,7 @@ protected:
 		}
 		void PushSamples(const short* samples, unsigned int num_samples);
 		unsigned int Mix(short* samples, unsigned int numSamples, bool consider_framelimit = true);
+		void SetInputSampleRate(unsigned int rate);
 		void SetVolume(unsigned int lvolume, unsigned int rvolume);
 	private:
 		CMixer *m_mixer;
@@ -112,13 +115,12 @@ protected:
 	};
 	MixerFifo m_dma_mixer;
 	MixerFifo m_streaming_mixer;
+	MixerFifo m_wiimote_speaker_mixer;
 	unsigned int m_sampleRate;
 
 	WaveFileWriter g_wave_writer;
 
 	bool m_logAudio;
-
-	bool m_throttle;
 
 	std::mutex m_csMixing;
 

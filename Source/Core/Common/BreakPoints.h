@@ -20,11 +20,13 @@ struct TBreakPoint
 
 struct TMemCheck
 {
-	TMemCheck() {
+	TMemCheck()
+	{
 		numHits = 0;
 		StartAddress = EndAddress = 0;
 		bRange = OnRead = OnWrite = Log = Break = false;
 	}
+
 	u32 StartAddress;
 	u32 EndAddress;
 
@@ -94,5 +96,5 @@ public:
 	TMemCheck *GetMemCheck(u32 address);
 	void Remove(u32 _Address);
 
-	void Clear() { m_MemChecks.clear(); };
+	void Clear() { m_MemChecks.clear(); }
 };

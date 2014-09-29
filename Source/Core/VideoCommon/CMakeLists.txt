@@ -18,10 +18,12 @@ set(SRCS	BPFunctions.cpp
 			PixelEngine.cpp
 			PixelShaderGen.cpp
 			PixelShaderManager.cpp
+			PostProcessing.cpp
 			RenderBase.cpp
 			Statistics.cpp
 			TextureCacheBase.cpp
 			TextureConversionShader.cpp
+			TextureDecoder_Common.cpp
 			VertexLoader.cpp
 			VertexLoaderManager.cpp
 			VertexLoader_Color.cpp

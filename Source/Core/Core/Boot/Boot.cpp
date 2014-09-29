@@ -3,8 +3,8 @@
 // Refer to the license.txt file included.
 
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/Hash.h"
 #include "Common/MathUtil.h"
@@ -429,7 +429,5 @@ bool CBoot::BootUp()
 	// Not part of the binary itself, but either we or Gecko OS might insert
 	// this, and it doesn't clear the icache properly.
 	HLE::Patch(0x800018a8, "GeckoCodehandler");
-
-	Host_UpdateLogDisplay();
 	return true;
 }

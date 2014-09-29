@@ -3,7 +3,6 @@
 // Refer to the license.txt file included.
 
 #include <string>
-#include <wx/wx.h>
 
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
@@ -13,9 +12,6 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Host.h"
-
-#include "DolphinWX/VideoConfigDiag.h"
-#include "DolphinWX/Debugger/DebuggerPanel.h"
 
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DUtil.h"
@@ -55,12 +51,6 @@ unsigned int VideoBackend::PeekMessages()
 	return TRUE;
 }
 
-void VideoBackend::UpdateFPSDisplay(const std::string& text)
-{
-	std::string str = StringFromFormat("%s | D3D | %s", scm_rev_str, text.c_str());
-	SetWindowTextA((HWND)m_window_handle, str.c_str());
-}
-
 std::string VideoBackend::GetName() const
 {
 	return "D3D";
@@ -82,9 +72,8 @@ void InitBackendInfo()
 	}
 
 	g_Config.backend_info.APIType = API_D3D;
-	g_Config.backend_info.bUseRGBATextures = true; // the GX formats barely match any D3D11 formats
 	g_Config.backend_info.bUseMinimalMipCount = true;
-	g_Config.backend_info.bSupports3DVision = false;
+	g_Config.backend_info.bSupportsExclusiveFullscreen = true;
 	g_Config.backend_info.bSupportsDualSourceBlend = true;
 	g_Config.backend_info.bSupportsPrimitiveRestart = true;
 	g_Config.backend_info.bSupportsOversizedViewports = false;
@@ -139,16 +128,13 @@ void InitBackendInfo()
 	DX11::D3D::UnloadD3D();
 }
 
-void VideoBackend::ShowConfig(void *_hParent)
+void VideoBackend::ShowConfig(void *hParent)
 {
-#if defined(HAVE_WX) && HAVE_WX
 	InitBackendInfo();
-	VideoConfigDiag diag((wxWindow*)_hParent, _trans("Direct3D"), "gfx_dx11");
-	diag.ShowModal();
-#endif
+	Host_ShowVideoConfig(hParent, GetDisplayName(), "gfx_dx11");
 }
 
-bool VideoBackend::Initialize(void *&window_handle)
+bool VideoBackend::Initialize(void *window_handle)
 {
 	if (window_handle == nullptr)
 		return false;
@@ -173,11 +159,6 @@ bool VideoBackend::Initialize(void *&window_handle)
 
 void VideoBackend::Video_Prepare()
 {
-	// Better be safe...
-	s_efbAccessRequested = FALSE;
-	s_FifoShuttingDown = FALSE;
-	s_swapRequested = FALSE;
-
 	// internal interfaces
 	g_renderer = new Renderer(m_window_handle);
 	g_texture_cache = new TextureCache;
@@ -209,10 +190,6 @@ void VideoBackend::Shutdown()
 	// TODO: should be in Video_Cleanup
 	if (g_renderer)
 	{
-		s_efbAccessRequested = FALSE;
-		s_FifoShuttingDown = FALSE;
-		s_swapRequested = FALSE;
-
 		// VideoCommon
 		Fifo_Shutdown();
 		CommandProcessor::Shutdown();
@@ -234,7 +211,8 @@ void VideoBackend::Shutdown()
 	}
 }
 
-void VideoBackend::Video_Cleanup() {
+void VideoBackend::Video_Cleanup()
+{
 }
 
 }

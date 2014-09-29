@@ -23,8 +23,8 @@
 #include <wx/translation.h>
 #include <wx/utils.h>
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/SymbolDB.h"
@@ -377,7 +377,8 @@ void CCodeWindow::NotifyMapLoaded()
 void CCodeWindow::OnSymbolListChange(wxCommandEvent& event)
 {
 	int index = symbols->GetSelection();
-	if (index >= 0) {
+	if (index >= 0)
+	{
 		Symbol* pSymbol = static_cast<Symbol *>(symbols->GetClientData(index));
 		if (pSymbol != nullptr)
 		{

@@ -24,9 +24,7 @@
 #ifdef _WIN32
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
-#include <iphlpapi.h>
 
-#include "Core/IPC_HLE/fakepoll.h"
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 
@@ -787,7 +785,8 @@ bool CWII_IPC_HLE_Device_net_ip_top::IOCtl(u32 _CommandAddress)
 			optval[15], optval[16], optval[17], optval[18], optval[19]);
 
 		//TODO: bug booto about this, 0x2005 most likely timeout related, default value on wii is , 0x2001 is most likely tcpnodelay
-		if (level == 6 && (optname == 0x2005 || optname == 0x2001)){
+		if (level == 6 && (optname == 0x2005 || optname == 0x2001))
+		{
 			ReturnValue = 0;
 			break;
 		}

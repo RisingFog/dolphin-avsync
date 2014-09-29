@@ -3,7 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "Common/ArmEmitter.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -15,6 +15,8 @@
 #include "Core/PowerPC/JitArm32/Jit.h"
 #include "Core/PowerPC/JitArm32/JitAsm.h"
 #include "Core/PowerPC/JitArm32/JitRegCache.h"
+
+using namespace ArmGen;
 
 void JitArm::UnsafeStoreFromReg(ARMReg dest, ARMReg value, int accessSize, s32 offset)
 {
@@ -52,7 +54,7 @@ void JitArm::UnsafeStoreFromReg(ARMReg dest, ARMReg value, int accessSize, s32 o
 
 void JitArm::SafeStoreFromReg(bool fastmem, s32 dest, u32 value, s32 regOffset, int accessSize, s32 offset)
 {
-	if (Core::g_CoreStartupParameter.bFastmem && fastmem)
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bFastmem && fastmem)
 	{
 		ARMReg RA;
 		ARMReg RB;
@@ -68,7 +70,9 @@ void JitArm::SafeStoreFromReg(bool fastmem, s32 dest, u32 value, s32 regOffset, 
 			NOP(1);
 		}
 		else
+		{
 			MOVI2R(R10, (u32)offset, false);
+		}
 
 		if (dest != -1)
 			ADD(R10, R10, RA);
@@ -267,7 +271,7 @@ void JitArm::SafeLoadToReg(bool fastmem, u32 dest, s32 addr, s32 offsetReg, int 
 {
 	ARMReg RD = gpr.R(dest);
 
-	if (Core::g_CoreStartupParameter.bFastmem && fastmem)
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bFastmem && fastmem)
 	{
 		// Preload for fastmem
 		if (offsetReg != -1)
@@ -439,11 +443,11 @@ void JitArm::lXX(UGeckoInstruction inst)
 
 	// LWZ idle skipping
 	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bSkipIdle &&
-		inst.OPCD == 32 &&
-		(inst.hex & 0xFFFF0000) == 0x800D0000 &&
-		(Memory::ReadUnchecked_U32(js.compilerPC + 4) == 0x28000000 ||
-		(SConfig::GetInstance().m_LocalCoreStartupParameter.bWii && Memory::ReadUnchecked_U32(js.compilerPC + 4) == 0x2C000000)) &&
-		Memory::ReadUnchecked_U32(js.compilerPC + 8) == 0x4182fff8)
+	    inst.OPCD == 32 &&
+	    (inst.hex & 0xFFFF0000) == 0x800D0000 &&
+	    (Memory::ReadUnchecked_U32(js.compilerPC + 4) == 0x28000000 ||
+	    (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii && Memory::ReadUnchecked_U32(js.compilerPC + 4) == 0x2C000000)) &&
+	    Memory::ReadUnchecked_U32(js.compilerPC + 8) == 0x4182fff8)
 	{
 		ARMReg RD = gpr.R(d);
 
@@ -476,7 +480,7 @@ void JitArm::lmw(UGeckoInstruction inst)
 {
 	INSTRUCTION_START
 	JITDISABLE(bJITLoadStoreOff);
-	FALLBACK_IF(!Core::g_CoreStartupParameter.bFastmem);
+	FALLBACK_IF(!SConfig::GetInstance().m_LocalCoreStartupParameter.bFastmem);
 
 	u32 a = inst.RA;
 	ARMReg rA = gpr.GetReg();
@@ -502,7 +506,7 @@ void JitArm::stmw(UGeckoInstruction inst)
 {
 	INSTRUCTION_START
 	JITDISABLE(bJITLoadStoreOff);
-	FALLBACK_IF(!Core::g_CoreStartupParameter.bFastmem);
+	FALLBACK_IF(!SConfig::GetInstance().m_LocalCoreStartupParameter.bFastmem);
 
 	u32 a = inst.RA;
 	ARMReg rA = gpr.GetReg();

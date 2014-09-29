@@ -1,3 +1,7 @@
+// Copyright 2013 Dolphin Emulator Project
+// Licensed under GPLv2
+// Refer to the license.txt file included.
+
 #include <map>
 #include <string>
 #include <utility>
@@ -31,6 +35,8 @@
 #include "DolphinWX/Main.h"
 #include "DolphinWX/VideoConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
+#include "VideoBackends/OGL/main.h"
+#include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -113,7 +119,7 @@ static wxString scaled_efb_copy_desc = wxTRANSLATE("Greatly increases quality of
 static wxString pixel_lighting_desc = wxTRANSLATE("Calculate lighting of 3D graphics per-pixel rather than per vertex.\nDecreases emulation speed by some percent (depending on your GPU).\nThis usually is a safe enhancement, but might cause issues sometimes.\n\nIf unsure, leave this unchecked.");
 static wxString fast_depth_calc_desc = wxTRANSLATE("Use a less accurate algorithm to calculate depth values.\nCauses issues in a few games but might give a decent speedup.\n\nIf unsure, leave this checked.");
 static wxString force_filtering_desc = wxTRANSLATE("Force texture filtering even if the emulated game explicitly disabled it.\nImproves texture quality slightly but causes glitches in some games.\n\nIf unsure, leave this unchecked.");
-static wxString _3d_vision_desc = wxTRANSLATE("Enable 3D effects via stereoscopy using Nvidia 3D Vision technology if it's supported by your GPU.\nPossibly causes issues.\nRequires fullscreen to work.\n\nIf unsure, leave this unchecked.");
+static wxString borderless_fullscreen_desc = wxTRANSLATE("Implement fullscreen mode with a borderless window spanning the whole screen instead of using exclusive mode.\nAllows for faster transitions between fullscreen and windowed mode, but increases input latency, makes movement less smooth and slightly decreases performance.\nExclusive mode is required to support Nvidia 3D Vision.\n\nIf unsure, leave this unchecked.");
 static wxString internal_res_desc = wxTRANSLATE("Specifies the resolution used to render at. A high resolution will improve visual quality a lot but is also quite heavy on performance and might cause glitches in certain games.\n\"Multiple of 640x528\" is a bit slower than \"Window Size\" but yields less issues. Generally speaking, the lower the internal resolution is, the better your performance will be.\n\nIf unsure, select 640x528.");
 static wxString efb_access_desc = wxTRANSLATE("Ignore any requests of the CPU to read from or write to the EFB.\nImproves performance in some games, but might disable some gameplay-related features or graphical effects.\n\nIf unsure, leave this unchecked.");
 static wxString efb_emulate_format_changes_desc = wxTRANSLATE("Ignore any changes to the EFB format.\nImproves performance in many games without any negative effect. Causes graphical defects in a small number of other games though.\n\nIf unsure, leave this checked.");
@@ -148,6 +154,7 @@ static wxString cache_efb_copies_desc = wxTRANSLATE("Slightly speeds up EFB to R
 static wxString shader_errors_desc = wxTRANSLATE("Usually if shader compilation fails, an error message is displayed.\nHowever, one may skip the popups to allow interruption free gameplay by checking this option.\n\nIf unsure, leave this unchecked.");
 
 
+#if !defined(__APPLE__)
 // Search for available resolutions - TODO: Move to Common?
 static wxArrayString GetListOfResolutions()
 {
@@ -174,7 +181,10 @@ static wxArrayString GetListOfResolutions()
 		ZeroMemory(&dmi, sizeof(dmi));
 	}
 #elif defined(HAVE_XRANDR) && HAVE_XRANDR
-	main_frame->m_XRRConfig->AddResolutions(retlist);
+	std::vector<std::string> resos;
+	main_frame->m_XRRConfig->AddResolutions(resos);
+	for (auto res : resos)
+		retlist.Add(StrToWxStr(res));
 #elif defined(__APPLE__)
 	CFArrayRef modes = CGDisplayCopyAllDisplayModes(CGMainDisplayID(), nullptr);
 	for (CFIndex i = 0; i < CFArrayGetCount(modes); i++)
@@ -205,6 +215,7 @@ static wxArrayString GetListOfResolutions()
 #endif
 	return retlist;
 }
+#endif
 
 VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, const std::string& _ininame)
 	: wxDialog(parent, -1,
@@ -230,7 +241,7 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 
 	// backend
 	{
-	wxStaticText* const label_backend = new wxStaticText(page_general, wxID_ANY, _("Backend:"));
+	label_backend = new wxStaticText(page_general, wxID_ANY, _("Backend:"));
 	choice_backend = new wxChoice(page_general, wxID_ANY);
 	RegisterControl(choice_backend, wxGetTranslation(backend_desc));
 
@@ -244,18 +255,12 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 
 	szr_basic->Add(label_backend, 1, wxALIGN_CENTER_VERTICAL, 5);
 	szr_basic->Add(choice_backend, 1, 0, 0);
-
-	if (Core::IsRunning())
-	{
-		label_backend->Disable();
-		choice_backend->Disable();
-	}
 	}
 
 	// adapter (D3D only)
 	if (vconfig.backend_info.Adapters.size())
 	{
-		wxChoice* const choice_adapter = CreateChoice(page_general, vconfig.iAdapter, wxGetTranslation(adapter_desc));
+		choice_adapter = CreateChoice(page_general, vconfig.iAdapter, wxGetTranslation(adapter_desc));
 
 		for (const std::string& adapter : vconfig.backend_info.Adapters)
 		{
@@ -264,7 +269,8 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 
 		choice_adapter->Select(vconfig.iAdapter);
 
-		szr_basic->Add(new wxStaticText(page_general, -1, _("Adapter:")), 1, wxALIGN_CENTER_VERTICAL, 5);
+		label_adapter = new wxStaticText(page_general, wxID_ANY, _("Adapter:"));
+		szr_basic->Add(label_adapter, 1, wxALIGN_CENTER_VERTICAL, 5);
 		szr_basic->Add(choice_adapter, 1, 0, 0);
 	}
 
@@ -280,7 +286,7 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 		wxArrayString res_list = GetListOfResolutions();
 		if (res_list.empty())
 			res_list.Add(_("<No resolutions found>"));
-		wxStaticText* const label_display_resolution = new wxStaticText(page_general, wxID_ANY, _("Fullscreen Resolution:"));
+		label_display_resolution = new wxStaticText(page_general, wxID_ANY, _("Fullscreen Resolution:"));
 		choice_display_resolution = new wxChoice(page_general, wxID_ANY, wxDefaultPosition, wxDefaultSize, res_list);
 		RegisterControl(choice_display_resolution, wxGetTranslation(display_res_desc));
 		choice_display_resolution->Bind(wxEVT_CHOICE, &VideoConfigDiag::Event_DisplayResolution, this);
@@ -289,12 +295,6 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 
 		szr_display->Add(label_display_resolution, 1, wxALIGN_CENTER_VERTICAL, 0);
 		szr_display->Add(choice_display_resolution);
-
-		if (Core::IsRunning())
-		{
-			label_display_resolution->Disable();
-			choice_display_resolution->Disable();
-		}
 	}
 #endif
 
@@ -319,16 +319,12 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 	wxFlexGridSizer* const szr_other = new wxFlexGridSizer(2, 5, 5);
 
 	{
-	SettingCheckBox* render_to_main_cb;
 	szr_other->Add(CreateCheckBox(page_general, _("Show FPS"), wxGetTranslation(show_fps_desc), vconfig.bShowFPS));
 	szr_other->Add(CreateCheckBox(page_general, _("Log Render Time to File"), wxGetTranslation(log_render_time_to_file_desc), vconfig.bLogRenderTimeToFile));
 	szr_other->Add(CreateCheckBox(page_general, _("Auto adjust Window Size"), wxGetTranslation(auto_window_size_desc), SConfig::GetInstance().m_LocalCoreStartupParameter.bRenderWindowAutoSize));
 	szr_other->Add(CreateCheckBox(page_general, _("Keep Window on Top"), wxGetTranslation(keep_window_on_top_desc), SConfig::GetInstance().m_LocalCoreStartupParameter.bKeepWindowOnTop));
 	szr_other->Add(CreateCheckBox(page_general, _("Hide Mouse Cursor"), wxGetTranslation(hide_mouse_cursor_desc), SConfig::GetInstance().m_LocalCoreStartupParameter.bHideCursor));
-	szr_other->Add(render_to_main_cb = CreateCheckBox(page_general, _("Render to Main Window"), wxGetTranslation(render_to_main_win_desc), SConfig::GetInstance().m_LocalCoreStartupParameter.bRenderToMain));
-
-	if (Core::IsRunning())
-		render_to_main_cb->Disable();
+	szr_other->Add(render_to_main_checkbox = CreateCheckBox(page_general, _("Render to Main Window"), wxGetTranslation(render_to_main_win_desc), SConfig::GetInstance().m_LocalCoreStartupParameter.bRenderToMain));
 	}
 
 
@@ -397,9 +393,12 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 	// postproc shader
 	if (vconfig.backend_info.PPShaders.size())
 	{
+		wxFlexGridSizer* const szr_pp = new wxFlexGridSizer(3, 5, 5);
 		wxChoice *const choice_ppshader = new wxChoice(page_enh, -1);
 		RegisterControl(choice_ppshader, wxGetTranslation(ppshader_desc));
 		choice_ppshader->AppendString(_("(off)"));
+
+		button_config_pp = new wxButton(page_enh, wxID_ANY, _("Config"));
 
 		for (const std::string& shader : vconfig.backend_info.PPShaders)
 		{
@@ -411,25 +410,27 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 		else
 			choice_ppshader->SetStringSelection(StrToWxStr(vconfig.sPostProcessingShader));
 
+		// Should the configuration button be loaded by default?
+		PostProcessingShaderConfiguration postprocessing_shader;
+		postprocessing_shader.LoadShader(vconfig.sPostProcessingShader);
+		button_config_pp->Enable(postprocessing_shader.HasOptions());
+
 		choice_ppshader->Bind(wxEVT_CHOICE, &VideoConfigDiag::Event_PPShader, this);
+		button_config_pp->Bind(wxEVT_BUTTON, &VideoConfigDiag::Event_ConfigurePPShader, this);
 
 		szr_enh->Add(new wxStaticText(page_enh, -1, _("Post-Processing Effect:")), 1, wxALIGN_CENTER_VERTICAL, 0);
-		szr_enh->Add(choice_ppshader);
+		szr_pp->Add(choice_ppshader);
+		szr_pp->Add(button_config_pp);
+		szr_enh->Add(szr_pp);
 	}
 
-	// Scaled copy, PL, Bilinear filter, 3D Vision
+	// Scaled copy, PL, Bilinear filter
 	szr_enh->Add(CreateCheckBox(page_enh, _("Scaled EFB Copy"), wxGetTranslation(scaled_efb_copy_desc), vconfig.bCopyEFBScaled));
 	szr_enh->Add(CreateCheckBox(page_enh, _("Per-Pixel Lighting"), wxGetTranslation(pixel_lighting_desc), vconfig.bEnablePixelLighting));
 	szr_enh->Add(CreateCheckBox(page_enh, _("Force Texture Filtering"), wxGetTranslation(force_filtering_desc), vconfig.bForceFiltering));
 
 	szr_enh->Add(CreateCheckBox(page_enh, _("Widescreen Hack"), wxGetTranslation(ws_hack_desc), vconfig.bWidescreenHack));
 	szr_enh->Add(CreateCheckBox(page_enh, _("Disable Fog"), wxGetTranslation(disable_fog_desc), vconfig.bDisableFog));
-
-	// 3D Vision
-	_3d_vision = CreateCheckBox(page_enh, _("3D Vision"), wxGetTranslation(_3d_vision_desc), vconfig.b3DVision);
-	_3d_vision->Show(vconfig.backend_info.bSupports3DVision);
-	szr_enh->Add(_3d_vision);
-	// TODO: Add anaglyph 3d here
 
 	wxStaticBoxSizer* const group_enh = new wxStaticBoxSizer(wxVERTICAL, page_enh, _("Enhancements"));
 	group_enh->Add(szr_enh, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
@@ -571,18 +572,21 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title, con
 
 	// Progressive Scan
 	{
-	wxCheckBox* const cb_prog_scan = new wxCheckBox(page_advanced, wxID_ANY, _("Enable Progressive Scan"));
-	RegisterControl(cb_prog_scan, wxGetTranslation(prog_scan_desc));
-	cb_prog_scan->Bind(wxEVT_CHECKBOX, &VideoConfigDiag::Event_ProgressiveScan, this);
-	if (Core::IsRunning())
-		cb_prog_scan->Disable();
+	progressive_scan_checkbox = new wxCheckBox(page_advanced, wxID_ANY, _("Enable Progressive Scan"));
+	RegisterControl(progressive_scan_checkbox, wxGetTranslation(prog_scan_desc));
+	progressive_scan_checkbox->Bind(wxEVT_CHECKBOX, &VideoConfigDiag::Event_ProgressiveScan, this);
 
-	cb_prog_scan->SetValue(SConfig::GetInstance().m_LocalCoreStartupParameter.bProgressive);
+	progressive_scan_checkbox->SetValue(SConfig::GetInstance().m_LocalCoreStartupParameter.bProgressive);
 	// A bit strange behavior, but this needs to stay in sync with the main progressive boolean; TODO: Is this still necessary?
 	SConfig::GetInstance().m_SYSCONF->SetData("IPL.PGS", SConfig::GetInstance().m_LocalCoreStartupParameter.bProgressive);
 
-	szr_misc->Add(cb_prog_scan);
+	szr_misc->Add(progressive_scan_checkbox);
 	}
+
+	// Borderless Fullscreen
+	borderless_fullscreen = CreateCheckBox(page_advanced, _("Borderless Fullscreen"), wxGetTranslation(borderless_fullscreen_desc), vconfig.bBorderlessFullscreen);
+	borderless_fullscreen->Show(vconfig.backend_info.bSupportsExclusiveFullscreen);
+	szr_misc->Add(borderless_fullscreen);
 
 	wxStaticBoxSizer* const group_misc = new wxStaticBoxSizer(wxVERTICAL, page_advanced, _("Misc"));
 	szr_advanced->Add(group_misc, 0, wxEXPAND | wxALL, 5);

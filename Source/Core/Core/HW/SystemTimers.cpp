@@ -1,20 +1,6 @@
-// Copyright (C) 2003 Dolphin Project.
-
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, version 2.0.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License 2.0 for more details.
-
-// A copy of the GPL 2.0 should have been included with the program.
-// If not, see http://www.gnu.org/licenses/
-
-// Official Git repository and contact information can be found at
-// http://code.google.com/p/dolphin-emu/
-
+// Copyright 2014 Dolphin Emulator Project
+// Licensed under GPLv2
+// Refer to the license.txt file included.
 
 // This file controls all system timers
 
@@ -57,7 +43,7 @@ IPC_HLE_PERIOD: For the Wiimote this is the call schedule:
 */
 
 #include "Common/Atomic.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/Thread.h"
 #include "Common/Timer.h"
 
@@ -83,31 +69,6 @@ namespace SystemTimers
 {
 
 static u32 CPU_CORE_CLOCK  = 486000000u;             // 486 mhz (its not 485, stop bugging me!)
-
-/*
-GameCube                   MHz
-flipper <-> ARAM bus:      81 (DSP)
-gekko <-> flipper bus:     162
-flipper <-> 1T-SRAM bus:   324
-gekko:                     486
-
-These contain some guesses:
-Wii                             MHz
-hollywood <-> GDDR3 RAM bus:    ??? no idea really
-broadway <-> hollywood bus:     243
-hollywood <-> 1T-SRAM bus:      486
-broadway:                       729
-*/
-// Ratio of TB and Decrementer to clock cycles.
-// TB clk is 1/4 of BUS clk. And it seems BUS clk is really 1/3 of CPU clk.
-// So, ratio is 1 / (1/4 * 1/3 = 1/12) = 12.
-// note: ZWW is ok and faster with TIMER_RATIO=8 though.
-// !!! POSSIBLE STABLE PERF BOOST HACK THERE !!!
-
-enum
-{
-	TIMER_RATIO = 12
-};
 
 static int et_Dec;
 static int et_VI;
@@ -233,9 +194,9 @@ static void ThrottleCallback(u64 last_time, int cyclesLate)
 
 	int diff = (u32)last_time - time;
 	const SConfig& config = SConfig::GetInstance();
-	bool frame_limiter = config.m_Framelimit && config.m_Framelimit != 2 && !Core::GetIsFramelimiterTempDisabled();
+	bool frame_limiter = config.m_Framelimit && !Core::GetIsFramelimiterTempDisabled();
 	u32 next_event = GetTicksPerSecond()/1000;
-	if (SConfig::GetInstance().m_Framelimit > 2)
+	if (SConfig::GetInstance().m_Framelimit > 1)
 	{
 		next_event = next_event * (SConfig::GetInstance().m_Framelimit - 1) * 5 / VideoInterface::TargetRefreshRate;
 	}

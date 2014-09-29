@@ -53,8 +53,8 @@
 #include <wx/validate.h>
 #include <wx/windowid.h>
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
@@ -73,7 +73,6 @@
 #include "DolphinWX/ISOFile.h"
 #include "DolphinWX/ISOProperties.h"
 #include "DolphinWX/PatchAddEdit.h"
-#include "DolphinWX/PHackSettings.h"
 #include "DolphinWX/WxUtils.h"
 #include "DolphinWX/resources/isoprop_disc.xpm"
 #include "DolphinWX/resources/isoprop_file.xpm"
@@ -105,7 +104,6 @@ BEGIN_EVENT_TABLE(CISOProperties, wxDialog)
 	EVT_BUTTON(ID_SHOWDEFAULTCONFIG, CISOProperties::OnShowDefaultConfig)
 	EVT_CHOICE(ID_EMUSTATE, CISOProperties::SetRefresh)
 	EVT_CHOICE(ID_EMU_ISSUES, CISOProperties::SetRefresh)
-	EVT_BUTTON(ID_PHSETTINGS, CISOProperties::PHackButtonClicked)
 	EVT_LISTBOX(ID_PATCHES_LIST, CISOProperties::ListSelectionChanged)
 	EVT_BUTTON(ID_EDITPATCH, CISOProperties::PatchButtonClicked)
 	EVT_BUTTON(ID_ADDPATCH, CISOProperties::PatchButtonClicked)
@@ -169,12 +167,10 @@ CISOProperties::CISOProperties(const std::string fileName, wxWindow* parent, wxW
 
 	if (!_iniFilename.length())
 	{
-		char tmp[17];
-		u8 _tTitleID[8];
-		if (OpenISO->GetTitleID(_tTitleID))
+		u8 title_id[8];
+		if (OpenISO->GetTitleID(title_id))
 		{
-			snprintf(tmp, 17, "%016" PRIx64, Common::swap64(_tTitleID));
-			_iniFilename = tmp;
+			_iniFilename = StringFromFormat("%016" PRIx64, Common::swap64(title_id));
 		}
 	}
 
@@ -367,7 +363,7 @@ long CISOProperties::GetElementStyle(const char* section, const char* key)
 void CISOProperties::CreateGUIControls(bool IsWad)
 {
 	wxButton* const EditConfig = new wxButton(this, ID_EDITCONFIG, _("Edit Config"));
-	EditConfig->SetToolTip(_("This will let you Manually Edit the INI config file"));
+	EditConfig->SetToolTip(_("This will let you manually edit the INI config file."));
 
 	wxButton* const EditConfigDefault = new wxButton(this, ID_SHOWDEFAULTCONFIG, _("Show Defaults"));
 	EditConfigDefault->SetToolTip(_("Opens the default (read-only) configuration for this game in an external text editor."));
@@ -413,13 +409,6 @@ void CISOProperties::CreateGUIControls(bool IsWad)
 	UseBBox = new wxCheckBox(m_GameConfig, ID_USE_BBOX, _("Enable Bounding Box Calculation"), wxDefaultPosition, wxDefaultSize, GetElementStyle("Video", "UseBBox"));
 	UseBBox->SetToolTip(_("If checked, the bounding box registers will be updated. Used by the Paper Mario games."));
 
-	// Hack
-	wxFlexGridSizer* const szrPHackSettings = new wxFlexGridSizer(0);
-	PHackEnable = new wxCheckBox(m_GameConfig, ID_PHACKENABLE, _("Custom Projection Hack"), wxDefaultPosition, wxDefaultSize, wxCHK_2STATE);
-	PHackEnable->SetToolTip(_("Enables Custom Projection Hack"));
-	PHSettings = new wxButton(m_GameConfig, ID_PHSETTINGS, _("Settings..."));
-	PHSettings->SetToolTip(_("Customize some Orthographic Projection parameters."));
-
 	wxBoxSizer* const sEmuState = new wxBoxSizer(wxHORIZONTAL);
 	wxStaticText* const EmuStateText = new wxStaticText(m_GameConfig, wxID_ANY, _("Emulation State: "));
 	arrayStringFor_EmuState.Add(_("Not Set"));
@@ -455,10 +444,7 @@ void CISOProperties::CreateGUIControls(bool IsWad)
 
 	wxStaticBoxSizer * const sbVideoOverrides = new wxStaticBoxSizer(wxVERTICAL, m_GameConfig, _("Video"));
 	sbVideoOverrides->Add(UseBBox, 0, wxLEFT, 5);
-	szrPHackSettings->Add(PHackEnable, 0, wxALIGN_CENTER_VERTICAL|wxLEFT, 5);
-	szrPHackSettings->Add(PHSettings, 0, wxLEFT, 5);
 
-	sbVideoOverrides->Add(szrPHackSettings, 0, wxEXPAND);
 	wxStaticBoxSizer * const sbGameConfig = new wxStaticBoxSizer(wxVERTICAL, m_GameConfig, _("Game-Specific Settings"));
 	sbGameConfig->Add(OverrideText, 0, wxEXPAND|wxALL, 5);
 	sbGameConfig->Add(sbCoreOverrides, 0, wxEXPAND);
@@ -654,7 +640,7 @@ void CISOProperties::CreateGUIControls(bool IsWad)
 void CISOProperties::OnClose(wxCloseEvent& WXUNUSED (event))
 {
 	if (!SaveGameConfig())
-		PanicAlertT("Could not save %s", GameIniFileLocal.c_str());
+		WxUtils::ShowErrorDialog(wxString::Format(_("Could not save %s."), GameIniFileLocal.c_str()));
 
 	EndModal(bRefreshList ? wxID_OK : wxID_CANCEL);
 }
@@ -915,7 +901,7 @@ void CISOProperties::OnExtractDataFromHeader(wxCommandEvent& event)
 		}
 		else
 		{
-			PanicAlertT("Partition doesn't exist: %d", partitionNum);
+			WxUtils::ShowErrorDialog(wxString::Format(_("Partition doesn't exist: %d"), partitionNum));
 			return;
 		}
 	}
@@ -935,7 +921,7 @@ void CISOProperties::OnExtractDataFromHeader(wxCommandEvent& event)
 	}
 
 	if (!ret)
-		PanicAlertT("Failed to extract to %s!", WxStrToStr(Path).c_str());
+		WxUtils::ShowErrorDialog(wxString::Format(_("Failed to extract to %s!"), WxStrToStr(Path).c_str()));
 }
 
 class IntegrityCheckThread : public wxThread
@@ -1038,15 +1024,9 @@ void CISOProperties::LoadGameConfig()
 	SetCheckboxValueFromGameini("Video", "UseBBox", UseBBox);
 
 	IniFile::Section* default_video = GameIniDefault.GetOrCreateSection("Video");
-	IniFile::Section* local_video = GameIniLocal.GetOrCreateSection("Video");
 
-	// First set values from default gameini, then apply values from local gameini
 	int iTemp;
 	default_video->Get("ProjectionHack", &iTemp);
-	PHackEnable->SetValue(!!iTemp);
-	if (local_video->Get("ProjectionHack", &iTemp))
-		PHackEnable->SetValue(!!iTemp);
-
 	default_video->Get("PH_SZNear", &PHack_Data.PHackSZNear);
 	if (GameIniLocal.GetIfExists("Video", "PH_SZNear", &iTemp))
 		PHack_Data.PHackSZNear = !!iTemp;
@@ -1061,7 +1041,6 @@ void CISOProperties::LoadGameConfig()
 	default_video->Get("PH_ZFar", &PHack_Data.PHZFar);
 	if (GameIniLocal.GetIfExists("Video", "PH_ZFar", &sTemp))
 		PHack_Data.PHZFar = sTemp;
-
 
 	IniFile::Section* default_emustate = GameIniDefault.GetOrCreateSection("EmuState");
 	default_emustate->Get("EmulationStateId", &iTemp, 0/*Not Set*/);
@@ -1133,7 +1112,6 @@ bool CISOProperties::SaveGameConfig()
 			GameIniLocal.DeleteKey((section), (key)); \
 	} while (0)
 
-	SAVE_IF_NOT_DEFAULT("Video", "ProjectionHack", (int)PHackEnable->GetValue(), 0);
 	SAVE_IF_NOT_DEFAULT("Video", "PH_SZNear", (PHack_Data.PHackSZNear ? 1 : 0), 0);
 	SAVE_IF_NOT_DEFAULT("Video", "PH_SZFar", (PHack_Data.PHackSZFar ? 1 : 0), 0);
 	SAVE_IF_NOT_DEFAULT("Video", "PH_ZNear", PHack_Data.PHZNear, "");
@@ -1170,17 +1148,21 @@ void CISOProperties::LaunchExternalEditor(const std::string& filename)
 		filetype = wxTheMimeTypesManager->GetFileTypeFromMimeType("text/plain");
 		if (filetype == nullptr) // MIME type failed, aborting mission
 		{
-			PanicAlertT("Filetype 'ini' is unknown! Will not open!");
+			WxUtils::ShowErrorDialog(_("Filetype 'ini' is unknown! Will not open!"));
 			return;
 		}
 	}
-	wxString OpenCommand;
-	OpenCommand = filetype->GetOpenCommand(StrToWxStr(filename));
+
+	wxString OpenCommand = filetype->GetOpenCommand(StrToWxStr(filename));
 	if (OpenCommand.IsEmpty())
-		PanicAlertT("Couldn't find open command for extension 'ini'!");
+	{
+		WxUtils::ShowErrorDialog(_("Couldn't find open command for extension 'ini'!"));
+	}
 	else
+	{
 		if (wxExecute(OpenCommand, wxEXEC_SYNC) == -1)
-			PanicAlertT("wxExecute returned -1 on application run!");
+			WxUtils::ShowErrorDialog(_("wxExecute returned -1 on application run!"));
+	}
 #endif
 
 	bRefreshList = true; // Just in case
@@ -1329,17 +1311,6 @@ void CISOProperties::PatchList_Save()
 	GameIniLocal.SetLines("OnFrame", lines);
 }
 
-void CISOProperties::PHackButtonClicked(wxCommandEvent& event)
-{
-	if (event.GetId() == ID_PHSETTINGS)
-	{
-		::PHack_Data = PHack_Data;
-		CPHackSettings dlg(this, 1);
-		if (dlg.ShowModal() == wxID_OK)
-			PHack_Data = ::PHack_Data;
-	}
-}
-
 void CISOProperties::PatchButtonClicked(wxCommandEvent& event)
 {
 	int selection = Patches->GetSelection();
@@ -1398,9 +1369,11 @@ void CISOProperties::ActionReplayList_Save()
 	std::vector<std::string> lines;
 	std::vector<std::string> enabledLines;
 	u32 index = 0;
+	u32 cheats_chkbox_count = Cheats->GetCount();
 	for (const ActionReplay::ARCode& code : arCodes)
 	{
-		if (Cheats->IsChecked(index))
+		// Check the index against the count because of the hacky way codes are added from the "Cheat Search" dialog
+		if ((index < cheats_chkbox_count) && Cheats->IsChecked(index))
 			enabledLines.push_back("$" + code.name);
 
 		// Do not save default cheats.

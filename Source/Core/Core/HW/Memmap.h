@@ -1,25 +1,12 @@
-// Copyright (C) 2003 Dolphin Project.
-
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, version 2.0.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License 2.0 for more details.
-
-// A copy of the GPL 2.0 should have been included with the program.
-// If not, see http://www.gnu.org/licenses/
-
-// Official Git repository and contact information can be found at
-// http://code.google.com/p/dolphin-emu/
+// Copyright 2014 Dolphin Emulator Project
+// Licensed under GPLv2
+// Refer to the license.txt file included.
 
 #pragma once
 
 #include <string>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 
 // Enable memory checks in the Debug/DebugFast builds, but NOT in release
 #if defined(_DEBUG) || defined(DEBUGFAST)
@@ -131,7 +118,7 @@ void Write_U64_Swap(const u64 _Data, const u32 _Address);
 // Useful helper functions, used by ARM JIT
 void Write_F64(const double _Data, const u32 _Address);
 
-void GetString(std::string& _string, const u32 _Address);
+std::string GetString(u32 em_address);
 
 void WriteBigEData(const u8 *_pData, const u32 _Address, const size_t size);
 void ReadBigEData(u8 *_pDest, const u32 _Address, const u32 size);
@@ -139,6 +126,7 @@ u8* GetPointer(const u32 _Address);
 void DMA_LCToMemory(const u32 _iMemAddr, const u32 _iCacheAddr, const u32 _iNumBlocks);
 void DMA_MemoryToLC(const u32 _iCacheAddr, const u32 _iMemAddr, const u32 _iNumBlocks);
 void Memset(const u32 _Address, const u8 _Data, const u32 _iLength);
+void ClearCacheLine(const u32 _Address); // Zeroes 32 bytes; address should be 32-byte-aligned
 
 // TLB functions
 void SDRUpdated();
@@ -153,4 +141,4 @@ u32 TranslateAddress(u32 _Address, XCheckTLBFlag _Flag);
 void InvalidateTLBEntry(u32 _Address);
 extern u32 pagetable_base;
 extern u32 pagetable_hashmask;
-};
+}

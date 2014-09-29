@@ -68,11 +68,9 @@ public:
 
 	virtual void EmuStateChange(EMUSTATE_CHANGE) = 0;
 
-	virtual void UpdateFPSDisplay(const std::string&) = 0;
-
 	virtual unsigned int PeekMessages() = 0;
 
-	virtual bool Initialize(void *&) = 0;
+	virtual bool Initialize(void *window_handle) = 0;
 	virtual void Shutdown() = 0;
 	virtual void RunLoop(bool enable) = 0;
 
@@ -86,7 +84,7 @@ public:
 	virtual void Video_ExitLoop() = 0;
 	virtual void Video_Cleanup() = 0; // called from gl/d3d thread
 
-	virtual void Video_BeginField(u32, u32, u32) = 0;
+	virtual void Video_BeginField(u32, u32, u32, u32) = 0;
 	virtual void Video_EndField() = 0;
 
 	virtual u32 Video_AccessEFB(EFBAccessType, u32, u32, u32) = 0;
@@ -127,13 +125,12 @@ extern VideoBackend* g_video_backend;
 class VideoBackendHardware : public VideoBackend
 {
 	void RunLoop(bool enable) override;
-	bool Initialize(void *&) override { InitializeShared(); return true; }
 
 	void EmuStateChange(EMUSTATE_CHANGE) override;
 
 	void Video_EnterLoop() override;
 	void Video_ExitLoop() override;
-	void Video_BeginField(u32, u32, u32) override;
+	void Video_BeginField(u32, u32, u32, u32) override;
 	void Video_EndField() override;
 
 	u32 Video_AccessEFB(EFBAccessType, u32, u32, u32) override;

@@ -1,4 +1,4 @@
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 
 #include "VideoCommon/BPStructs.h"
 #include "VideoCommon/Debugger.h"
@@ -144,7 +144,8 @@ u32 VertexManager::GetRemainingIndices(int primitive)
 
 void VertexManager::Flush()
 {
-	if (IsFlushed) return;
+	if (IsFlushed)
+		return;
 
 	// loading a state will invalidate BP, so check for it
 	g_video_backend->CheckInvalidState();
@@ -230,6 +231,9 @@ void VertexManager::Flush()
 		g_perf_query->DisableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
 
 	GFX_DEBUGGER_PAUSE_AT(NEXT_FLUSH, true);
+
+	if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens)
+		ERROR_LOG(VIDEO, "xf.numtexgens (%d) does not match bp.numtexgens (%d). Error in command stream.", xfmem.numTexGen.numTexGens, bpmem.genMode.numtexgens.Value());
 
 	IsFlushed = true;
 }

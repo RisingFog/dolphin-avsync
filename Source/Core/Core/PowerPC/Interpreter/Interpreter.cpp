@@ -5,8 +5,7 @@
 #include <cinttypes>
 #include <string>
 
-#include "PowerPCDisasm.h"
-
+#include "Common/GekkoDisassembler.h"
 #include "Common/StringUtil.h"
 #include "Core/Host.h"
 #include "Core/Debugger/Debugger_SymbolMap.h"
@@ -18,7 +17,8 @@
 #include "Core/PowerPC/GDBStub.h"
 #endif
 
-namespace {
+namespace
+{
 	u32 last_pc;
 }
 
@@ -32,11 +32,11 @@ Interpreter::_interpreterInstruction Interpreter::m_opTable31[1024];
 Interpreter::_interpreterInstruction Interpreter::m_opTable59[32];
 Interpreter::_interpreterInstruction Interpreter::m_opTable63[1024];
 
-void Interpreter::RunTable4(UGeckoInstruction _inst)  {m_opTable4 [_inst.SUBOP10](_inst);}
-void Interpreter::RunTable19(UGeckoInstruction _inst) {m_opTable19[_inst.SUBOP10](_inst);}
-void Interpreter::RunTable31(UGeckoInstruction _inst) {m_opTable31[_inst.SUBOP10](_inst);}
-void Interpreter::RunTable59(UGeckoInstruction _inst) {m_opTable59[_inst.SUBOP5 ](_inst);}
-void Interpreter::RunTable63(UGeckoInstruction _inst) {m_opTable63[_inst.SUBOP10](_inst);}
+void Interpreter::RunTable4(UGeckoInstruction _inst)  { m_opTable4 [_inst.SUBOP10](_inst); }
+void Interpreter::RunTable19(UGeckoInstruction _inst) { m_opTable19[_inst.SUBOP10](_inst); }
+void Interpreter::RunTable31(UGeckoInstruction _inst) { m_opTable31[_inst.SUBOP10](_inst); }
+void Interpreter::RunTable59(UGeckoInstruction _inst) { m_opTable59[_inst.SUBOP5 ](_inst); }
+void Interpreter::RunTable63(UGeckoInstruction _inst) { m_opTable63[_inst.SUBOP10](_inst); }
 
 void Interpreter::Init()
 {
@@ -81,13 +81,11 @@ static void Trace(UGeckoInstruction& instCode)
 		fregs += StringFromFormat("f%02d: %08" PRIx64 " %08" PRIx64 " ", i, PowerPC::ppcState.ps[i][0], PowerPC::ppcState.ps[i][1]);
 	}
 
-	char ppcInst[256];
-	DisassembleGekko(instCode.hex, PC, ppcInst, 256);
-
-	DEBUG_LOG(POWERPC, "INTER PC: %08x SRR0: %08x SRR1: %08x CRfast: %02x%02x%02x%02x%02x%02x%02x%02x FPSCR: %08x MSR: %08x LR: %08x %s %s %08x %s", PC, SRR0, SRR1, PowerPC::ppcState.cr_fast[0], PowerPC::ppcState.cr_fast[1], PowerPC::ppcState.cr_fast[2], PowerPC::ppcState.cr_fast[3], PowerPC::ppcState.cr_fast[4], PowerPC::ppcState.cr_fast[5], PowerPC::ppcState.cr_fast[6], PowerPC::ppcState.cr_fast[7], PowerPC::ppcState.fpscr, PowerPC::ppcState.msr, PowerPC::ppcState.spr[8], regs.c_str(), fregs.c_str(), instCode.hex, ppcInst);
+	std::string ppc_inst = GekkoDisassembler::Disassemble(instCode.hex, PC);
+	DEBUG_LOG(POWERPC, "INTER PC: %08x SRR0: %08x SRR1: %08x CRval: %016lx FPSCR: %08x MSR: %08x LR: %08x %s %08x %s", PC, SRR0, SRR1, (unsigned long) PowerPC::ppcState.cr_val[0], PowerPC::ppcState.fpscr, PowerPC::ppcState.msr, PowerPC::ppcState.spr[8], regs.c_str(), instCode.hex, ppc_inst.c_str());
 }
 
-int Interpreter::SingleStepInner(void)
+int Interpreter::SingleStepInner()
 {
 	static UGeckoInstruction instCode;
 	u32 function = HLE::GetFunctionIndex(PC);
@@ -116,8 +114,8 @@ int Interpreter::SingleStepInner(void)
 	if (function == 0)
 	{
 		#ifdef USE_GDBSTUB
-		if (gdb_active() && gdb_bp_x(PC)) {
-
+		if (gdb_active() && gdb_bp_x(PC))
+		{
 			Host_UpdateDisasmDialog();
 
 			gdb_signal(SIGTRAP);
@@ -181,13 +179,6 @@ int Interpreter::SingleStepInner(void)
 	last_pc = PC;
 	PC = NPC;
 
-#if defined(_DEBUG) || defined(DEBUGFAST)
-	if (PowerPC::ppcState.gpr[1] == 0)
-	{
-		WARN_LOG(POWERPC, "%i Corrupt stack", PowerPC::ppcState.DebugCount);
-	}
-	PowerPC::ppcState.DebugCount++;
-#endif
 	patches();
 
 	GekkoOPInfo *opinfo = GetOpInfo(instCode);
@@ -260,8 +251,10 @@ void Interpreter::Run()
 							{
 								// Write space
 								if (j > 0)
+								{
 									if (PCVec.at(j) != PCVec.at(j-1) + 4)
 										NOTICE_LOG(POWERPC, "");
+								}
 
 								NOTICE_LOG(POWERPC, "PC: 0x%08x", PCVec.at(j));
 							}
@@ -309,11 +302,10 @@ void Interpreter::unknown_instruction(UGeckoInstruction _inst)
 {
 	if (_inst.hex != 0)
 	{
-		char disasm[256];
-		DisassembleGekko(Memory::ReadUnchecked_U32(last_pc), last_pc, disasm, 256);
-		NOTICE_LOG(POWERPC, "Last PC = %08x : %s", last_pc, disasm);
+		std::string disasm = GekkoDisassembler::Disassemble(Memory::ReadUnchecked_U32(last_pc), last_pc);
+		NOTICE_LOG(POWERPC, "Last PC = %08x : %s", last_pc, disasm.c_str());
 		Dolphin_Debugger::PrintCallstack();
-		_dbg_assert_msg_(POWERPC, 0, "\nIntCPU: Unknown instruction %08x at PC = %08x  last_PC = %08x  LR = %08x\n", _inst.hex, PC, last_pc, LR);
+		_assert_msg_(POWERPC, 0, "\nIntCPU: Unknown instruction %08x at PC = %08x  last_PC = %08x  LR = %08x\n", _inst.hex, PC, last_pc, LR);
 	}
 
 }

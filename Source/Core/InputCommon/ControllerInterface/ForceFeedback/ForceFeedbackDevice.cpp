@@ -2,7 +2,9 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <string>
+#include "Common/Thread.h"
 #include "InputCommon/ControllerInterface/ForceFeedback/ForceFeedbackDevice.h"
 
 namespace ciface
@@ -15,11 +17,11 @@ template class ForceFeedbackDevice::Force<DICONSTANTFORCE>;
 template class ForceFeedbackDevice::Force<DIRAMPFORCE>;
 template class ForceFeedbackDevice::Force<DIPERIODIC>;
 
-typedef struct
+struct ForceType
 {
 	GUID guid;
 	const std::string name;
-} ForceType;
+};
 
 static const ForceType force_type_names[] =
 {
@@ -67,7 +69,7 @@ bool ForceFeedbackDevice::InitForceFeedback(const LPDIRECTINPUTDEVICE8 device, i
 	eff.dwGain = DI_FFNOMINALMAX;
 	eff.dwTriggerButton = DIEB_NOTRIGGER;
 	eff.dwTriggerRepeatInterval = 0;
-	eff.cAxes = std::min((DWORD)1, (DWORD)cAxes);
+	eff.cAxes = std::min<DWORD>(1, cAxes);
 	eff.rgdwAxes = rgdwAxes;
 	eff.rglDirection = rglDirection;
 

@@ -24,8 +24,8 @@
 #include <EGL/egl.h>
 
 #include "Android/ButtonManager.h"
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/CPUDetect.h"
 #include "Common/Event.h"
 #include "Common/FileUtil.h"
@@ -49,14 +49,11 @@
 ANativeWindow* surf;
 int g_width, g_height;
 std::string g_filename;
-static std::thread g_run_thread;
 
 #define DOLPHIN_TAG "Dolphinemu"
 
 void Host_NotifyMapLoaded() {}
 void Host_RefreshDSPDebuggerWindow() {}
-
-void Host_ShowJitResults(unsigned int address){}
 
 Common::Event updateMainFrameEvent;
 void Host_Message(int Id)
@@ -68,22 +65,16 @@ void* Host_GetRenderHandle()
 	return surf;
 }
 
-void* Host_GetInstance() { return nullptr; }
-
 void Host_UpdateTitle(const std::string& title)
 {
 	__android_log_write(ANDROID_LOG_INFO, DOLPHIN_TAG, title.c_str());
 }
-
-void Host_UpdateLogDisplay(){}
 
 void Host_UpdateDisasmDialog(){}
 
 void Host_UpdateMainFrame()
 {
 }
-
-void Host_UpdateBreakPointView(){}
 
 void Host_GetRenderWindowSize(int& x, int& y, int& width, int& height)
 {
@@ -94,6 +85,9 @@ void Host_GetRenderWindowSize(int& x, int& y, int& width, int& height)
 }
 
 void Host_RequestRenderWindowSize(int width, int height) {}
+
+void Host_RequestFullscreen(bool enable_fullscreen) {}
+
 void Host_SetStartupDebuggingParameters()
 {
 }
@@ -110,10 +104,6 @@ bool Host_RendererHasFocus()
 
 void Host_ConnectWiimote(int wm_idx, bool connect) {}
 
-void Host_SetWaitCursor(bool enable){}
-
-void Host_UpdateStatusBar(const std::string& text, int filed){}
-
 void Host_SysMessage(const char *fmt, ...)
 {
 	va_list args;
@@ -124,6 +114,8 @@ void Host_SysMessage(const char *fmt, ...)
 }
 
 void Host_SetWiiMoteConnectionState(int _State) {}
+
+void Host_ShowVideoConfig(void*, const std::string&, const std::string&) {}
 
 #define DVD_BANNER_WIDTH 96
 #define DVD_BANNER_HEIGHT 32
@@ -141,7 +133,7 @@ static inline u32 GetPixel(u32 *buffer, unsigned int x, unsigned int y) {
 	return buffer[y * 192 + x];
 }
 
-bool LoadBanner(std::string filename, u32 *Banner)
+static bool LoadBanner(std::string filename, u32 *Banner)
 {
 	DiscIO::IVolume* pVolume = DiscIO::CreateVolumeFromFilename(filename);
 
@@ -196,7 +188,8 @@ bool LoadBanner(std::string filename, u32 *Banner)
 
 	return false;
 }
-std::string GetName(std::string filename)
+
+static std::string GetName(std::string filename)
 {
 	if (!m_names.empty())
 		return m_names[0];
@@ -210,7 +203,7 @@ std::string GetName(std::string filename)
 	return name;
 }
 
-std::string GetJString(JNIEnv *env, jstring jstr)
+static std::string GetJString(JNIEnv *env, jstring jstr)
 {
 	std::string result = "";
 	if (!jstr)

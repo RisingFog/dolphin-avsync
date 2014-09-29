@@ -19,9 +19,7 @@
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 
-namespace {
-
-void ParseLine(const std::string& line, std::string* keyOut, std::string* valueOut)
+void IniFile::ParseLine(const std::string& line, std::string* keyOut, std::string* valueOut)
 {
 	if (line[0] == '#')
 		return;
@@ -40,8 +38,6 @@ void ParseLine(const std::string& line, std::string* keyOut, std::string* valueO
 	}
 }
 
-}
-
 const std::string& IniFile::NULL_STRING = "";
 
 void IniFile::Section::Set(const std::string& key, const std::string& newValue)
@@ -57,30 +53,6 @@ void IniFile::Section::Set(const std::string& key, const std::string& newValue)
 }
 
 void IniFile::Section::Set(const std::string& key, const std::string& newValue, const std::string& defaultValue)
-{
-	if (newValue != defaultValue)
-		Set(key, newValue);
-	else
-		Delete(key);
-}
-
-void IniFile::Section::Set(const std::string& key, const float newValue, const float defaultValue)
-{
-	if (newValue != defaultValue)
-		Set(key, newValue);
-	else
-		Delete(key);
-}
-
-void IniFile::Section::Set(const std::string& key, int newValue, int defaultValue)
-{
-	if (newValue != defaultValue)
-		Set(key, newValue);
-	else
-		Delete(key);
-}
-
-void IniFile::Section::Set(const std::string& key, bool newValue, bool defaultValue)
 {
 	if (newValue != defaultValue)
 		Set(key, newValue);

@@ -5,25 +5,15 @@
 #include <cstring>
 #include <string>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/CPUDetect.h"
 
 #ifdef _WIN32
-#define _interlockedbittestandset workaround_ms_header_bug_platform_sdk6_set
-#define _interlockedbittestandreset workaround_ms_header_bug_platform_sdk6_reset
-#define _interlockedbittestandset64 workaround_ms_header_bug_platform_sdk6_set64
-#define _interlockedbittestandreset64 workaround_ms_header_bug_platform_sdk6_reset64
 #include <intrin.h>
-#undef _interlockedbittestandset
-#undef _interlockedbittestandreset
-#undef _interlockedbittestandset64
-#undef _interlockedbittestandreset64
 #else
 
 //#include <config/i386/cpuid.h>
-#ifndef _M_GENERIC
 #include <xmmintrin.h>
-#endif
 
 #if defined __FreeBSD__
 #include <sys/types.h>
@@ -32,9 +22,7 @@
 static inline void do_cpuid(unsigned int *eax, unsigned int *ebx,
 							unsigned int *ecx, unsigned int *edx)
 {
-#if defined _M_GENERIC
-	(*eax) = (*ebx) = (*ecx) = (*edx) = 0;
-#elif defined _LP64
+#if defined _LP64
 	// Note: EBX is reserved on Mac OS X and in PIC on Linux, so it has to
 	// restored at the end of the asm block.
 	__asm__ (
@@ -79,18 +67,17 @@ static void __cpuid(int info[4], int x)
 #define _XCR_XFEATURE_ENABLED_MASK 0
 static unsigned long long _xgetbv(unsigned int index)
 {
-#ifndef _M_GENERIC
 	unsigned int eax, edx;
 	__asm__ __volatile__("xgetbv" : "=a"(eax), "=d"(edx) : "c"(index));
 	return ((unsigned long long)edx << 32) | eax;
-#endif
 }
 
 #endif
 
 CPUInfo cpu_info;
 
-CPUInfo::CPUInfo() {
+CPUInfo::CPUInfo()
+{
 	Detect();
 }
 
@@ -98,24 +85,15 @@ CPUInfo::CPUInfo() {
 void CPUInfo::Detect()
 {
 	memset(this, 0, sizeof(*this));
-#if _M_X86_32
-	Mode64bit = false;
-#elif _M_X86_64
+#ifdef _M_X86_64
 	Mode64bit = true;
 	OS64bit = true;
 #endif
 	num_cores = 1;
 
-#ifdef _WIN32
-#if _M_X86_32
-	BOOL f64 = false;
-	IsWow64Process(GetCurrentProcess(), &f64);
-	OS64bit = (f64 == TRUE) ? true : false;
-#endif
-#endif
-
 	// Set obvious defaults, for extra safety
-	if (Mode64bit) {
+	if (Mode64bit)
+	{
 		bSSE = true;
 		bSSE2 = true;
 		bLongMode = true;
@@ -148,7 +126,8 @@ void CPUInfo::Detect()
 	bool ht = false;
 	HTT = ht;
 	logical_cpu_count = 1;
-	if (max_std_fn >= 1) {
+	if (max_std_fn >= 1)
+	{
 		__cpuid(cpu_id, 0x00000001);
 		logical_cpu_count = (cpu_id[1] >> 16) & 0xFF;
 		ht = (cpu_id[3] >> 28) & 1;
@@ -181,11 +160,24 @@ void CPUInfo::Detect()
 					bFMA = true;
 			}
 		}
+
+		if (max_std_fn >= 7)
+		{
+			__cpuid(cpu_id, 0x00000007);
+			// careful; we can't enable AVX2 unless the XSAVE/XGETBV checks above passed
+			if ((cpu_id[1] >> 5) & 1)
+				bAVX2 = bAVX;
+			if ((cpu_id[1] >> 3) & 1)
+				bBMI1 = true;
+			if ((cpu_id[1] >> 8) & 1)
+				bBMI2 = true;
+		}
 	}
 
 	bFlushToZero = bSSE;
 
-	if (max_ex_fn >= 0x80000004) {
+	if (max_ex_fn >= 0x80000004)
+	{
 		// Extract brand string
 		__cpuid(cpu_id, 0x80000002);
 		memcpy(brand_string, cpu_id, sizeof(cpu_id));
@@ -194,23 +186,29 @@ void CPUInfo::Detect()
 		__cpuid(cpu_id, 0x80000004);
 		memcpy(brand_string + 32, cpu_id, sizeof(cpu_id));
 	}
-	if (max_ex_fn >= 0x80000001) {
+	if (max_ex_fn >= 0x80000001)
+	{
 		// Check for more features.
 		__cpuid(cpu_id, 0x80000001);
 		if (cpu_id[2] & 1) bLAHFSAHF64 = true;
+		if ((cpu_id[2] >> 5) & 1) bLZCNT = true;
 		if ((cpu_id[3] >> 29) & 1) bLongMode = true;
 	}
 
 	num_cores = (logical_cpu_count == 0) ? 1 : logical_cpu_count;
 
-	if (max_ex_fn >= 0x80000008) {
+	if (max_ex_fn >= 0x80000008)
+	{
 		// Get number of cores. This is a bit complicated. Following AMD manual here.
 		__cpuid(cpu_id, 0x80000008);
 		int apic_id_core_id_size = (cpu_id[2] >> 12) & 0xF;
-		if (apic_id_core_id_size == 0) {
-			if (ht) {
+		if (apic_id_core_id_size == 0)
+		{
+			if (ht)
+			{
 				// New mechanism for modern Intel CPUs.
-				if (vendor == VENDOR_INTEL) {
+				if (vendor == VENDOR_INTEL)
+				{
 					__cpuid(cpu_id, 0x00000004);
 					int cores_x_package = ((cpu_id[0] >> 26) & 0x3F) + 1;
 					HTT = (cores_x_package < logical_cpu_count);
@@ -219,7 +217,8 @@ void CPUInfo::Detect()
 					logical_cpu_count /= cores_x_package;
 				}
 			}
-		} else {
+		} else
+		{
 			// Use AMD's new method.
 			num_cores = (cpu_id[2] & 0xFF) + 1;
 		}
@@ -243,6 +242,9 @@ std::string CPUInfo::Summarize()
 	if (bSSE4_2) sum += ", SSE4.2";
 	if (HTT) sum += ", HTT";
 	if (bAVX) sum += ", AVX";
+	if (bAVX2) sum += ", AVX2";
+	if (bBMI1) sum += ", BMI1";
+	if (bBMI2) sum += ", BMI2";
 	if (bFMA) sum += ", FMA";
 	if (bAES) sum += ", AES";
 	if (bMOVBE) sum += ", MOVBE";

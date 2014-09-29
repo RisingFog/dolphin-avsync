@@ -7,7 +7,6 @@
 #include <Foundation/Foundation.h>
 #include <IOKit/hid/IOHIDLib.h>
 #include <Cocoa/Cocoa.h>
-#include <wx/wx.h> // wxWidgets
 
 #include "InputCommon/ControllerInterface/OSX/OSXKeyboard.h"
 
@@ -23,13 +22,11 @@ Keyboard::Keyboard(IOHIDDeviceRef device, std::string name, int index, void *win
 {
 	// This class should only recieve Keyboard or Keypad devices
 	// Now, filter on just the buttons we can handle sanely
-	NSDictionary *matchingElements =
-	 [NSDictionary dictionaryWithObjectsAndKeys:
-	  [NSNumber numberWithInteger: kIOHIDElementTypeInput_Button],
-		@kIOHIDElementTypeKey,
-	  [NSNumber numberWithInteger: 0], @kIOHIDElementMinKey,
-	  [NSNumber numberWithInteger: 1], @kIOHIDElementMaxKey,
-	  nil];
+	NSDictionary *matchingElements = @{
+		@kIOHIDElementTypeKey : [NSNumber numberWithInteger: kIOHIDElementTypeInput_Button],
+		@kIOHIDElementMinKey  : [NSNumber numberWithInteger: 0],
+		@kIOHIDElementMaxKey  : [NSNumber numberWithInteger: 1]
+	};
 
 	CFArrayRef elements = IOHIDDeviceCopyMatchingElements(m_device,
 		(CFDictionaryRef)matchingElements, kIOHIDOptionsTypeNone);
@@ -47,7 +44,7 @@ Keyboard::Keyboard(IOHIDDeviceRef device, std::string name, int index, void *win
 		CFRelease(elements);
 	}
 
-	m_windowid = [[(NSView *)(((wxWindow *)window)->GetHandle()) window] windowNumber];
+	m_windowid = [[reinterpret_cast<NSView*>(window) window] windowNumber];
 
 	// cursor, with a hax for-loop
 	for (unsigned int i=0; i<4; ++i)
@@ -116,7 +113,8 @@ Keyboard::Key::Key(IOHIDElementRef element, IOHIDDeviceRef device)
 	: m_element(element)
 	, m_device(device)
 {
-	static const struct PrettyKeys {
+	static const struct PrettyKeys
+	{
 		const uint32_t    code;
 		const char *const name;
 	} named_keys[] = {
@@ -224,14 +222,17 @@ Keyboard::Key::Key(IOHIDElementRef element, IOHIDDeviceRef device)
 		{ kHIDUsage_KeyboardRightGUI, "Right Command" },
 		{ 184, "Eject" },
 	};
-	
+
 	const uint32_t keycode = IOHIDElementGetUsage(m_element);
 	for (auto & named_key : named_keys)
-		if (named_key.code == keycode) {
+	{
+		if (named_key.code == keycode)
+		{
 			m_name = named_key.name;
 			return;
 		}
-	
+	}
+
 	std::stringstream ss;
 	ss << "Key " << keycode;
 	m_name = ss.str();
@@ -249,7 +250,7 @@ ControlState Keyboard::Key::GetState() const
 
 ControlState Keyboard::Cursor::GetState() const
 {
-	return std::max(0.0f, ControlState(m_axis) / (m_positive ? 1.0f : -1.0f));
+	return std::max(0.0, ControlState(m_axis) / (m_positive ? 1.0 : -1.0));
 }
 
 ControlState Keyboard::Button::GetState() const

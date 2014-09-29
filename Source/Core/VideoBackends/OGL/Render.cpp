@@ -2,6 +2,7 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
@@ -20,6 +21,7 @@
 #include "Core/Movie.h"
 
 #include "VideoBackends/OGL/FramebufferManager.h"
+#include "VideoBackends/OGL/GLInterfaceBase.h"
 #include "VideoBackends/OGL/GLUtil.h"
 #include "VideoBackends/OGL/main.h"
 #include "VideoBackends/OGL/PostProcessing.h"
@@ -47,16 +49,6 @@
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
 
-#if defined(HAVE_WX) && HAVE_WX
-#include "DolphinWX/WxUtils.h"
-#endif
-
-#ifdef _WIN32
-#include <mmsystem.h>
-#endif
-
-#ifdef _WIN32
-#endif
 #if defined _WIN32 || defined HAVE_LIBAV
 #include "VideoCommon/AVIDump.h"
 #endif
@@ -72,7 +64,8 @@ static int OSDInternalW, OSDInternalH;
 namespace OGL
 {
 
-enum MultisampleMode {
+enum MultisampleMode
+{
 	MULTISAMPLE_OFF,
 	MULTISAMPLE_2X,
 	MULTISAMPLE_4X,
@@ -98,10 +91,6 @@ static int s_LastMultisampleMode = 0;
 static u32 s_blendMode;
 
 static bool s_vsync;
-
-#if defined(HAVE_WX) && HAVE_WX
-static std::thread scrshotThread;
-#endif
 
 // EFB cache related
 static const u32 EFB_CACHE_RECT_SIZE = 64; // Cache 64x64 blocks.
@@ -137,26 +126,35 @@ static int GetNumMSAASamples(int MSAAMode)
 			samples = 1;
 	}
 
-	if (samples <= g_ogl_config.max_samples) return samples;
+	if (samples <= g_ogl_config.max_samples)
+		return samples;
 
 	// TODO: move this to InitBackendInfo
 	OSD::AddMessage(StringFromFormat("%d Anti Aliasing samples selected, but only %d supported by your GPU.", samples, g_ogl_config.max_samples), 10000);
 	return g_ogl_config.max_samples;
 }
 
-static void ApplySSAASettings() {
+static void ApplySSAASettings()
+{
 	// GLES3 doesn't support SSAA
 	if (GLInterface->GetMode() == GLInterfaceMode::MODE_OPENGL)
 	{
-		if (g_ActiveConfig.iMultisampleMode == MULTISAMPLE_SSAA_4X) {
-			if (g_ogl_config.bSupportSampleShading) {
+		if (g_ActiveConfig.iMultisampleMode == MULTISAMPLE_SSAA_4X)
+		{
+			if (g_ogl_config.bSupportSampleShading)
+			{
 				glEnable(GL_SAMPLE_SHADING_ARB);
-				glMinSampleShadingARB(s_MSAASamples);
-			} else {
+				GLfloat min_sample_shading_value = static_cast<GLfloat>(s_MSAASamples);
+				glMinSampleShadingARB(min_sample_shading_value);
+			}
+			else
+			{
 				// TODO: move this to InitBackendInfo
 				OSD::AddMessage("SSAA Anti Aliasing isn't supported by your GPU.", 10000);
 			}
-		} else if (g_ogl_config.bSupportSampleShading) {
+		}
+		else if (g_ogl_config.bSupportSampleShading)
+		{
 			glDisable(GL_SAMPLE_SHADING_ARB);
 		}
 	}
@@ -220,28 +218,46 @@ static void InitDriverInfo()
 
 	// Get the vendor first
 	if (svendor == "NVIDIA Corporation" && srenderer != "NVIDIA Tegra")
+	{
 		vendor = DriverDetails::VENDOR_NVIDIA;
+	}
 	else if (svendor == "ATI Technologies Inc." || svendor == "Advanced Micro Devices, Inc.")
+	{
 		vendor = DriverDetails::VENDOR_ATI;
+	}
 	else if (std::string::npos != sversion.find("Mesa"))
+	{
 		vendor = DriverDetails::VENDOR_MESA;
+	}
 	else if (std::string::npos != svendor.find("Intel"))
+	{
 		vendor = DriverDetails::VENDOR_INTEL;
+	}
 	else if (svendor == "ARM")
+	{
 		vendor = DriverDetails::VENDOR_ARM;
+	}
 	else if (svendor == "http://limadriver.org/")
 	{
 		vendor = DriverDetails::VENDOR_ARM;
 		driver = DriverDetails::DRIVER_LIMA;
 	}
 	else if (svendor == "Qualcomm")
+	{
 		vendor = DriverDetails::VENDOR_QUALCOMM;
+	}
 	else if (svendor == "Imagination Technologies")
+	{
 		vendor = DriverDetails::VENDOR_IMGTEC;
+	}
 	else if (svendor == "NVIDIA Corporation" && srenderer == "NVIDIA Tegra")
+	{
 		vendor = DriverDetails::VENDOR_TEGRA;
+	}
 	else if (svendor == "Vivante Corporation")
+	{
 		vendor = DriverDetails::VENDOR_VIVANTE;
+	}
 
 	// Get device family and driver version...if we care about it
 	switch (vendor)
@@ -299,17 +315,22 @@ static void InitDriverInfo()
 			version = 100*major + 10*minor + release;
 		}
 		break;
-		case DriverDetails::VENDOR_INTEL: // Happens in OS X
+		case DriverDetails::VENDOR_INTEL: // Happens in OS X/Windows
+		{
 			sscanf(g_ogl_config.gl_renderer, "Intel HD Graphics %d", &family);
-			/*
+#ifdef _WIN32
 			int glmajor = 0;
 			int glminor = 0;
 			int major = 0;
 			int minor = 0;
 			int release = 0;
-			sscanf(g_ogl_config.gl_version, "%d.%d INTEL-%d.%d.%d", &glmajor, &glminor, &major, &minor, &release);
-			version = 10000*major + 1000*minor + release;
-			*/
+			int revision = 0;
+			// Example version string: '4.3.0 - Build 10.18.10.3907'
+			sscanf(g_ogl_config.gl_version, "%d.%d.0 - Build %d.%d.%d.%d", &glmajor, &glminor, &major, &minor, &release, &revision);
+			version = 100000000 * major + 1000000 * minor + 10000 * release + revision;
+			version /= 10000;
+#endif
+		}
 		break;
 		case DriverDetails::VENDOR_NVIDIA:
 		{
@@ -600,8 +621,11 @@ Renderer::Renderer()
 	if (g_ActiveConfig.backend_info.bSupportsPrimitiveRestart)
 	{
 		if (GLInterface->GetMode() == GLInterfaceMode::MODE_OPENGLES3)
+		{
 			glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+		}
 		else
+		{
 			if (g_ogl_config.bSupportOGL31)
 			{
 				glEnable(GL_PRIMITIVE_RESTART);
@@ -612,6 +636,7 @@ Renderer::Renderer()
 				glEnableClientState(GL_PRIMITIVE_RESTART_NV);
 				glPrimitiveRestartIndexNV(65535);
 			}
+		}
 	}
 	UpdateActiveConfig();
 	ClearEFBCache();
@@ -619,11 +644,6 @@ Renderer::Renderer()
 
 Renderer::~Renderer()
 {
-
-#if defined(HAVE_WX) && HAVE_WX
-	if (scrshotThread.joinable())
-		scrshotThread.join();
-#endif
 }
 
 void Renderer::Shutdown()
@@ -640,6 +660,9 @@ void Renderer::Shutdown()
 	delete s_pfont;
 	s_pfont = nullptr;
 	s_ShowEFBCopyRegions.Destroy();
+
+	delete m_post_processor;
+	m_post_processor = nullptr;
 }
 
 void Renderer::Init()
@@ -647,6 +670,8 @@ void Renderer::Init()
 	// Initialize the FramebufferManager
 	g_framebuffer_manager = new FramebufferManager(s_target_width, s_target_height,
 			s_MSAASamples);
+
+	m_post_processor = new OpenGLPostProcessing();
 
 	s_pfont = new RasterFont();
 
@@ -699,7 +724,7 @@ void Renderer::DrawDebugInfo()
 		glLineWidth(3.0f);
 
 		// 2*Coords + 3*Color
-		u32 length = stats.efb_regions.size() * sizeof(GLfloat) * (2+3)*2*6;
+		GLsizeiptr length = stats.efb_regions.size() * sizeof(GLfloat) * (2 + 3) * 2 * 6;
 		glBindBuffer(GL_ARRAY_BUFFER, s_ShowEFBCopyRegions_VBO);
 		glBufferData(GL_ARRAY_BUFFER, length, nullptr, GL_STREAM_DRAW);
 		GLfloat *Vertices = (GLfloat*)glMapBufferRange(GL_ARRAY_BUFFER, 0, length, GL_MAP_WRITE_BIT);
@@ -803,8 +828,9 @@ void Renderer::DrawDebugInfo()
 		glUnmapBuffer(GL_ARRAY_BUFFER);
 
 		s_ShowEFBCopyRegions.Bind();
-		glBindVertexArray( s_ShowEFBCopyRegions_VAO );
-		glDrawArrays(GL_LINES, 0, stats.efb_regions.size() * 2*6);
+		glBindVertexArray(s_ShowEFBCopyRegions_VAO);
+		GLsizei count = static_cast<GLsizei>(stats.efb_regions.size() * 2*6);
+		glDrawArrays(GL_LINES, 0, count);
 
 		// Restore Line Size
 		SetLineWidth();
@@ -1057,9 +1083,21 @@ u32 Renderer::AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data)
 			{
 				color |= 0xFF000000;
 			}
-			if (alpha_read_mode.ReadMode == 2) return color; // GX_READ_NONE
-			else if (alpha_read_mode.ReadMode == 1) return (color | 0xFF000000); // GX_READ_FF
-			else /*if(alpha_read_mode.ReadMode == 0)*/ return (color & 0x00FFFFFF); // GX_READ_00
+			if (alpha_read_mode.ReadMode == 2)
+			{
+				// GX_READ_NONE
+				return color;
+			}
+			else if (alpha_read_mode.ReadMode == 1)
+			{
+				// GX_READ_FF
+				return (color | 0xFF000000);
+			}
+			else /*if(alpha_read_mode.ReadMode == 0)*/
+			{
+				// GX_READ_00
+				return (color & 0x00FFFFFF);
+			}
 		}
 
 	case POKE_COLOR:
@@ -1149,7 +1187,11 @@ void Renderer::SetViewport()
 	}
 	else
 	{
-		glViewport(ceil(X), ceil(Y), ceil(Width), ceil(Height));
+		auto iceilf = [](float f)
+		{
+			return static_cast<GLint>(ceilf(f));
+		};
+		glViewport(iceilf(X), iceilf(Y), iceilf(Width), iceilf(Height));
 	}
 	glDepthRangef(GLNear, GLFar);
 }
@@ -1244,7 +1286,9 @@ void Renderer::SetBlendMode(bool forceUpdate)
 	newval |= bpmem.blendmode.subtract << 2;
 
 	if (bpmem.blendmode.subtract)
+	{
 		newval |= 0x0049;   // enable blending src 1 dst 1
+	}
 	else if (bpmem.blendmode.blendenable)
 	{
 		newval |= 1;    // enable blending
@@ -1255,8 +1299,10 @@ void Renderer::SetBlendMode(bool forceUpdate)
 	u32 changes = forceUpdate ? 0xFFFFFFFF : newval ^ s_blendMode;
 
 	if (changes & 1)
+	{
 		// blend enable change
 		(newval & 1) ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+	}
 
 	if (changes & 4)
 	{
@@ -1283,12 +1329,16 @@ void Renderer::SetBlendMode(bool forceUpdate)
 		else
 		{
 			// we can't use GL_DST_COLOR or GL_ONE_MINUS_DST_COLOR for source in alpha channel so use their alpha equivalent instead
-			if (srcidx == BlendMode::DSTCLR) srcidx = BlendMode::DSTALPHA;
-			if (srcidx == BlendMode::INVDSTCLR) srcidx = BlendMode::INVDSTALPHA;
+			if (srcidx == BlendMode::DSTCLR)
+				srcidx = BlendMode::DSTALPHA;
+			else if (srcidx == BlendMode::INVDSTCLR)
+				srcidx = BlendMode::INVDSTALPHA;
 
 			// we can't use GL_SRC_COLOR or GL_ONE_MINUS_SRC_COLOR for destination in alpha channel so use their alpha equivalent instead
-			if (dstidx == BlendMode::SRCCLR) dstidx = BlendMode::SRCALPHA;
-			if (dstidx == BlendMode::INVSRCCLR) dstidx = BlendMode::INVSRCALPHA;
+			if (dstidx == BlendMode::SRCCLR)
+				dstidx = BlendMode::SRCALPHA;
+			else if (dstidx == BlendMode::INVSRCCLR)
+				dstidx = BlendMode::INVSRCALPHA;
 		}
 		GLenum srcFactorAlpha = glSrcFactors[srcidx];
 		GLenum dstFactorAlpha = glDestFactors[dstidx];
@@ -1309,7 +1359,7 @@ static void DumpFrame(const std::vector<u8>& data, int w, int h)
 }
 
 // This function has the final picture. We adjust the aspect ratio here.
-void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangle& rc,float Gamma)
+void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc, float Gamma)
 {
 	static int w = 0, h = 0;
 	if (g_bSkipCurrentFrame || (!XFBWrited && !g_ActiveConfig.RealXFBEnabled()) || !fbWidth || !fbHeight)
@@ -1320,7 +1370,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 	}
 
 	u32 xfbCount = 0;
-	const XFBSourceBase* const* xfbSourceList = FramebufferManager::GetXFBSource(xfbAddr, fbWidth, fbHeight, xfbCount);
+	const XFBSourceBase* const* xfbSourceList = FramebufferManager::GetXFBSource(xfbAddr, fbStride, fbHeight, xfbCount);
 	if (g_ActiveConfig.VirtualXFBEnabled() && (!xfbSourceList || xfbCount == 0))
 	{
 		DumpFrame(frame_data, w, h);
@@ -1330,7 +1380,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 
 	ResetAPIState();
 
-	PostProcessing::Update(s_backbuffer_width, s_backbuffer_height);
+	m_post_processor->Update(s_backbuffer_width, s_backbuffer_height);
 	UpdateDrawRectangle(s_backbuffer_width, s_backbuffer_height);
 	TargetRectangle flipped_trc = GetTargetRectangle();
 
@@ -1353,7 +1403,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 	if (g_ActiveConfig.bUseXFB)
 	{
 		// Render to the real/postprocessing buffer now.
-		PostProcessing::BindTargetFramebuffer();
+		m_post_processor->BindTargetFramebuffer();
 
 		// draw each xfb source
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, FramebufferManager::GetXFBFramebuffer());
@@ -1366,22 +1416,29 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 
 			if (g_ActiveConfig.bUseRealXFB)
 			{
-				drawRc.top = flipped_trc.top;
-				drawRc.bottom = flipped_trc.bottom;
-				drawRc.left = flipped_trc.left;
-				drawRc.right = flipped_trc.right;
+				drawRc.top      = static_cast<float>(flipped_trc.top);
+				drawRc.bottom   = static_cast<float>(flipped_trc.bottom);
+				drawRc.left     = static_cast<float>(flipped_trc.left);
+				drawRc.right    = static_cast<float>(flipped_trc.right);
 			}
 			else
 			{
 				// use virtual xfb with offset
 				int xfbHeight = xfbSource->srcHeight;
 				int xfbWidth = xfbSource->srcWidth;
-				int hOffset = ((s32)xfbSource->srcAddr - (s32)xfbAddr) / ((s32)fbWidth * 2);
+				int hOffset = ((s32)xfbSource->srcAddr - (s32)xfbAddr) / ((s32)fbStride * 2);
 
-				drawRc.top = flipped_trc.top - hOffset * flipped_trc.GetHeight() / fbHeight;
-				drawRc.bottom = flipped_trc.top - (hOffset + xfbHeight) * flipped_trc.GetHeight() / fbHeight;
-				drawRc.left = flipped_trc.left + (flipped_trc.GetWidth() - xfbWidth * flipped_trc.GetWidth() / fbWidth)/2;
-				drawRc.right = flipped_trc.left + (flipped_trc.GetWidth() + xfbWidth * flipped_trc.GetWidth() / fbWidth)/2;
+				MathUtil::Rectangle<u32> rect_u32;
+
+				rect_u32.top = flipped_trc.top - hOffset * flipped_trc.GetHeight() / fbHeight;
+				rect_u32.bottom = flipped_trc.top - (hOffset + xfbHeight) * flipped_trc.GetHeight() / fbHeight;
+				rect_u32.left = flipped_trc.left + (flipped_trc.GetWidth() - xfbWidth * flipped_trc.GetWidth() / fbStride)/2;
+				rect_u32.right = flipped_trc.left + (flipped_trc.GetWidth() + xfbWidth * flipped_trc.GetWidth() / fbStride)/2;
+
+				drawRc.top      = static_cast<float>(rect_u32.top);
+				drawRc.bottom   = static_cast<float>(rect_u32.bottom);
+				drawRc.left     = static_cast<float>(rect_u32.left);
+				drawRc.right    = static_cast<float>(rect_u32.right);
 
 				// The following code disables auto stretch.  Kept for reference.
 				// scale draw area for a 1 to 1 pixel mapping with the draw target
@@ -1401,6 +1458,8 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 			sourceRc.top = xfbSource->sourceRc.top;
 			sourceRc.bottom = xfbSource->sourceRc.bottom;
 
+			sourceRc.right -= fbStride - fbWidth;
+
 			xfbSource->Draw(sourceRc, drawRc);
 		}
 	}
@@ -1412,7 +1471,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 		FramebufferManager::ResolveAndGetRenderTarget(rc);
 
 		// Render to the real/postprocessing buffer now. (resolve have changed this in msaa mode)
-		PostProcessing::BindTargetFramebuffer();
+		m_post_processor->BindTargetFramebuffer();
 
 		// always the non-msaa fbo
 		GLuint fb = s_MSAASamples>1?FramebufferManager::GetResolvedFramebuffer():FramebufferManager::GetEFBFramebuffer();
@@ -1423,7 +1482,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 			GL_COLOR_BUFFER_BIT, GL_LINEAR);
 	}
 
-	PostProcessing::BlitToScreen();
+	m_post_processor->BlitToScreen();
 
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 
@@ -1459,12 +1518,14 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 				if (!bLastFrameDumped)
 				{
 					#ifdef _WIN32
-						bAVIDumping = AVIDump::Start((HWND)((cInterfaceWGL*)GLInterface)->m_window_handle, w, h);
+						bAVIDumping = AVIDump::Start(nullptr, w, h);
 					#else
 						bAVIDumping = AVIDump::Start(w, h);
 					#endif
 					if (!bAVIDumping)
+					{
 						OSD::AddMessage("AVIDump Start failed", 2000);
+					}
 					else
 					{
 						OSD::AddMessage(StringFromFormat(
@@ -1484,7 +1545,9 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 				bLastFrameDumped = true;
 			}
 			else
+			{
 				NOTICE_LOG(VIDEO, "Error reading framebuffer");
+			}
 		}
 		else
 		{
@@ -1515,7 +1578,9 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 					movie_file_name = File::GetUserPath(D_DUMPFRAMES_IDX) + "framedump.raw";
 					pFrameDump.Open(movie_file_name, "wb");
 					if (!pFrameDump)
+					{
 						OSD::AddMessage("Error opening framedump.raw for writing.", 2000);
+					}
 					else
 					{
 						OSD::AddMessage(StringFromFormat("Dumping Frames to \"%s\" (%dx%d RGB24)", movie_file_name.c_str(), w, h), 2000);
@@ -1540,16 +1605,16 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight,const EFBRectangl
 	}
 	// Finish up the current frame, print some stats
 
-	SetWindowSize(fbWidth, fbHeight);
+	SetWindowSize(fbStride, fbHeight);
 
 	GLInterface->Update(); // just updates the render window position and the backbuffer size
 
 	bool xfbchanged = false;
 
-	if (FramebufferManagerBase::LastXfbWidth() != fbWidth || FramebufferManagerBase::LastXfbHeight() != fbHeight)
+	if (FramebufferManagerBase::LastXfbWidth() != fbStride || FramebufferManagerBase::LastXfbHeight() != fbHeight)
 	{
 		xfbchanged = true;
-		unsigned int const last_w = (fbWidth < 1 || fbWidth > MAX_XFB_WIDTH) ? MAX_XFB_WIDTH : fbWidth;
+		unsigned int const last_w = (fbStride < 1 || fbStride > MAX_XFB_WIDTH) ? MAX_XFB_WIDTH : fbStride;
 		unsigned int const last_h = (fbHeight < 1 || fbHeight > MAX_XFB_HEIGHT) ? MAX_XFB_HEIGHT : fbHeight;
 		FramebufferManagerBase::SetLastXfbWidth(last_w);
 		FramebufferManagerBase::SetLastXfbHeight(last_h);
@@ -1676,7 +1741,8 @@ void Renderer::RestoreAPIState()
 
 	VertexManager *vm = (OGL::VertexManager*)g_vertex_manager;
 	glBindBuffer(GL_ARRAY_BUFFER, vm->m_vertex_buffers);
-	glBindVertexArray(vm->m_last_vao);
+	if (vm->m_last_vao)
+		glBindVertexArray(vm->m_last_vao);
 
 	TextureCache::SetStage();
 }
@@ -1691,7 +1757,9 @@ void Renderer::SetGenerationMode()
 		glFrontFace(bpmem.genMode.cullmode == 2 ? GL_CCW : GL_CW);
 	}
 	else
+	{
 		glDisable(GL_CULL_FACE);
+	}
 }
 
 void Renderer::SetDepthMode()

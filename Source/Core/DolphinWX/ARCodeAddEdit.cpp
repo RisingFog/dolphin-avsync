@@ -12,6 +12,7 @@
 #include <wx/event.h>
 #include <wx/gbsizer.h>
 #include <wx/gdicmn.h>
+#include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/spinbutt.h>
 #include <wx/stattext.h>
@@ -20,7 +21,7 @@
 #include <wx/translation.h>
 #include <wx/windowid.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 #include "Core/ActionReplay.h"
 #include "Core/ARDecrypt.h"
@@ -148,7 +149,7 @@ void CARCodeAddEdit::SaveCheatData(wxCommandEvent& WXUNUSED (event))
 	// Codes with no lines appear to be deleted/hidden from the list.  Let's prevent that.
 	if (!decryptedLines.size())
 	{
-		PanicAlertT("The resulting decrypted AR code doesn't contain any lines.");
+		WxUtils::ShowErrorDialog(_("The resulting decrypted AR code doesn't contain any lines."));
 		return;
 	}
 

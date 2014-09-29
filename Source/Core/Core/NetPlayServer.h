@@ -4,14 +4,13 @@
 
 #pragma once
 
-#include <functional>
 #include <map>
 #include <queue>
 #include <sstream>
 
 #include <SFML/Network.hpp>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/CommonTypes.h"
 #include "Common/Thread.h"
 #include "Common/Timer.h"
@@ -31,7 +30,7 @@ public:
 
 	void SetNetSettings(const NetSettings &settings);
 
-	bool StartGame(const std::string &path);
+	bool StartGame();
 
 	void GetPadMapping(PadMapping map[]);
 	void SetPadMapping(const PadMapping map[]);

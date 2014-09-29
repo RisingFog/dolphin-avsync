@@ -3,8 +3,8 @@
 // Refer to the license.txt file included.
 
 #include "Common/ChunkFile.h"
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/NandPaths.h"
@@ -576,7 +576,8 @@ void CWII_IPC_HLE_Device_fs::DoState(PointerWrap& p)
 				File::IOFile handle(entry.physicalName, "rb");
 				char buf[65536];
 				u32 count = size;
-				while (count > 65536) {
+				while (count > 65536)
+				{
 					handle.ReadArray(&buf[0], 65536);
 					p.DoArray(&buf[0], 65536);
 					count -= 65536;

@@ -28,8 +28,8 @@
 #include <wx/utils.h>
 #include <wx/window.h>
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/CPUDetect.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
@@ -46,6 +46,8 @@
 #include "DolphinWX/Frame.h"
 #include "DolphinWX/Globals.h"
 #include "DolphinWX/Main.h"
+#include "DolphinWX/SoftwareVideoConfigDialog.h"
+#include "DolphinWX/VideoConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
 #include "DolphinWX/Debugger/CodeWindow.h"
 #include "DolphinWX/Debugger/JitWindow.h"
@@ -109,7 +111,8 @@ CFrame* main_frame = nullptr;
 #ifdef WIN32
 //Has no error handling.
 //I think that if an error occurs here there's no way to handle it anyway.
-LONG WINAPI MyUnhandledExceptionFilter(LPEXCEPTION_POINTERS e) {
+LONG WINAPI MyUnhandledExceptionFilter(LPEXCEPTION_POINTERS e)
+{
 	//EnterCriticalSection(&g_uefcs);
 
 	File::IOFile file("exceptioninfo.txt", "a");
@@ -120,11 +123,9 @@ LONG WINAPI MyUnhandledExceptionFilter(LPEXCEPTION_POINTERS e) {
 	//dumpCurrentDate(file);
 	etfprintf(file.GetHandle(), "Unhandled Exception\n  Code: 0x%08X\n",
 		e->ExceptionRecord->ExceptionCode);
-#if _M_X86_32
-	STACKTRACE2(file.GetHandle(), e->ContextRecord->Eip, e->ContextRecord->Esp, e->ContextRecord->Ebp);
-#else
+
 	STACKTRACE2(file.GetHandle(), e->ContextRecord->Rip, e->ContextRecord->Rsp, e->ContextRecord->Rbp);
-#endif
+
 	file.Close();
 	_flushall();
 
@@ -244,16 +245,6 @@ bool DolphinApp::OnInit()
 	wxHandleFatalExceptions(true);
 #endif
 
-#ifndef _M_ARM
-	// TODO: if First Boot
-	if (!cpu_info.bSSE2)
-	{
-		PanicAlertT("Hi,\n\nDolphin requires that your CPU has support for SSE2 extensions.\n"
-				"Unfortunately your CPU does not support them, so Dolphin will not run.\n\n"
-				"Sayonara!\n");
-		return false;
-	}
-#endif
 #ifdef __APPLE__
 	if (floor(NSAppKitVersionNumber) < NSAppKitVersionNumber10_7)
 	{
@@ -430,14 +421,14 @@ void DolphinApp::InitLanguageSupport()
 
 		if (!m_locale->IsOk())
 		{
-			PanicAlertT("Error loading selected language. Falling back to system default.");
+			wxMessageBox(_("Error loading selected language. Falling back to system default."), _("Error"));
 			delete m_locale;
 			m_locale = new wxLocale(wxLANGUAGE_DEFAULT);
 		}
 	}
 	else
 	{
-		PanicAlertT("The selected language is not supported by your system. Falling back to system default.");
+		wxMessageBox(_("The selected language is not supported by your system. Falling back to system default."), _("Error"));
 		m_locale = new wxLocale(wxLANGUAGE_DEFAULT);
 	}
 }
@@ -524,19 +515,6 @@ void Host_Message(int Id)
 	main_frame->GetEventHandler()->AddPendingEvent(event);
 }
 
-#ifdef _WIN32
-extern "C" HINSTANCE wxGetInstance();
-void* Host_GetInstance()
-{
-	return (void*)wxGetInstance();
-}
-#else
-void* Host_GetInstance()
-{
-	return nullptr;
-}
-#endif
-
 void* Host_GetRenderHandle()
 {
 	return main_frame->GetRenderHandle();
@@ -555,19 +533,6 @@ void Host_NotifyMapLoaded()
 	}
 }
 
-
-void Host_UpdateLogDisplay()
-{
-	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_UPDATELOGDISPLAY);
-	main_frame->GetEventHandler()->AddPendingEvent(event);
-
-	if (main_frame->g_pCodeWindow)
-	{
-		main_frame->g_pCodeWindow->GetEventHandler()->AddPendingEvent(event);
-	}
-}
-
-
 void Host_UpdateDisasmDialog()
 {
 	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_UPDATEDISASMDIALOG);
@@ -577,13 +542,6 @@ void Host_UpdateDisasmDialog()
 	{
 		main_frame->g_pCodeWindow->GetEventHandler()->AddPendingEvent(event);
 	}
-}
-
-
-void Host_ShowJitResults(unsigned int address)
-{
-	if (main_frame->g_pCodeWindow && main_frame->g_pCodeWindow->m_JitWindow)
-		main_frame->g_pCodeWindow->m_JitWindow->ViewAddr(address);
 }
 
 void Host_UpdateMainFrame()
@@ -604,17 +562,6 @@ void Host_UpdateTitle(const std::string& title)
 	main_frame->GetEventHandler()->AddPendingEvent(event);
 }
 
-void Host_UpdateBreakPointView()
-{
-	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_UPDATEBREAKPOINTS);
-	main_frame->GetEventHandler()->AddPendingEvent(event);
-
-	if (main_frame->g_pCodeWindow)
-	{
-		main_frame->g_pCodeWindow->GetEventHandler()->AddPendingEvent(event);
-	}
-}
-
 void Host_GetRenderWindowSize(int& x, int& y, int& width, int& height)
 {
 	main_frame->GetRenderWindowSize(x, y, width, height);
@@ -624,6 +571,13 @@ void Host_RequestRenderWindowSize(int width, int height)
 {
 	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_WINDOWSIZEREQUEST);
 	event.SetClientData(new std::pair<int, int>(width, height));
+	main_frame->GetEventHandler()->AddPendingEvent(event);
+}
+
+void Host_RequestFullscreen(bool enable_fullscreen)
+{
+	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_FULLSCREENREQUEST);
+	event.SetInt(enable_fullscreen ? 1 : 0);
 	main_frame->GetEventHandler()->AddPendingEvent(event);
 }
 
@@ -642,17 +596,6 @@ void Host_SetStartupDebuggingParameters()
 		StartUp.bBootToPause = false;
 	}
 	StartUp.bEnableDebugging = main_frame->g_pCodeWindow ? true : false; // RUNNING_DEBUG
-}
-
-void Host_UpdateStatusBar(const std::string& text, int Field)
-{
-	wxCommandEvent event(wxEVT_HOST_COMMAND, IDM_UPDATESTATUSBAR);
-	// Set the event string
-	event.SetString(StrToWxStr(text));
-	// Update statusbar field
-	event.SetInt(Field);
-	// Post message
-	main_frame->GetEventHandler()->AddPendingEvent(event);
 }
 
 void Host_SetWiiMoteConnectionState(int _State)
@@ -691,4 +634,19 @@ bool Host_RendererHasFocus()
 void Host_ConnectWiimote(int wm_idx, bool connect)
 {
 	CFrame::ConnectWiimote(wm_idx, connect);
+}
+
+void Host_ShowVideoConfig(void* parent, const std::string& backend_name,
+                          const std::string& config_name)
+{
+	if (backend_name == "Direct3D" || backend_name == "OpenGL")
+	{
+		VideoConfigDiag diag((wxWindow*)parent, backend_name, config_name);
+		diag.ShowModal();
+	}
+	else if (backend_name == "Software Renderer")
+	{
+		SoftwareVideoConfigDialog diag((wxWindow*)parent, backend_name, config_name);
+		diag.ShowModal();
+	}
 }

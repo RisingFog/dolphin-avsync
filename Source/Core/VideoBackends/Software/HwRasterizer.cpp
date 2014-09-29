@@ -2,9 +2,10 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/MemoryUtil.h"
 
+#include "VideoBackends/OGL/GLInterfaceBase.h"
 #include "VideoBackends/Software/BPMemLoader.h"
 #include "VideoBackends/Software/DebugUtil.h"
 #include "VideoBackends/Software/HwRasterizer.h"

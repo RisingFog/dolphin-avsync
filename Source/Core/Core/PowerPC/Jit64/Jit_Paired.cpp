@@ -2,17 +2,13 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
+#include "Common/CPUDetect.h"
 
 #include "Core/PowerPC/Jit64/Jit.h"
 #include "Core/PowerPC/Jit64/JitRegCache.h"
 
-// TODO
-// ps_madds0
-// ps_muls0
-// ps_madds1
-//   cmppd, andpd, andnpd, or
-//   lfsx, ps_merge01 etc
+using namespace Gen;
 
 static const u64 GC_ALIGNED16(psSignBits[2]) = {0x8000000000000000ULL, 0x8000000000000000ULL};
 static const u64 GC_ALIGNED16(psAbsMask[2])  = {0x7FFFFFFFFFFFFFFFULL, 0x7FFFFFFFFFFFFFFFULL};
@@ -34,9 +30,6 @@ void Jit64::ps_mr(UGeckoInstruction inst)
 
 void Jit64::ps_sel(UGeckoInstruction inst)
 {
-	// we can't use (V)BLENDVPD here because it just looks at the sign bit
-	// but we need -0 = +0
-
 	INSTRUCTION_START
 	JITDISABLE(bJITPairedOff);
 	FALLBACK_IF(inst.Rc);
@@ -47,16 +40,27 @@ void Jit64::ps_sel(UGeckoInstruction inst)
 	int c = inst.FC;
 
 	fpr.Lock(a, b, c, d);
-	MOVAPD(XMM0, fpr.R(a));
-	PXOR(XMM1, R(XMM1));
-	// XMM0 = XMM0 < 0 ? all 1s : all 0s
-	CMPPD(XMM0, R(XMM1), LT);
-	MOVAPD(XMM1, R(XMM0));
-	PAND(XMM0, fpr.R(b));
-	PANDN(XMM1, fpr.R(c));
-	POR(XMM0, R(XMM1));
+
+	if (cpu_info.bSSE4_1)
+	{
+		MOVAPD(XMM1, fpr.R(a));
+		PXOR(XMM0, R(XMM0));
+		CMPPD(XMM0, R(XMM1), NLE);
+		MOVAPD(XMM1, fpr.R(c));
+		BLENDVPD(XMM1, fpr.R(b));
+	}
+	else
+	{
+		MOVAPD(XMM0, fpr.R(a));
+		PXOR(XMM1, R(XMM1));
+		CMPPD(XMM1, R(XMM0), NLE);
+		MOVAPD(XMM0, R(XMM1));
+		PAND(XMM1, fpr.R(b));
+		PANDN(XMM0, fpr.R(c));
+		POR(XMM1, R(XMM0));
+	}
 	fpr.BindToRegister(d, false);
-	MOVAPD(fpr.RX(d), R(XMM0));
+	MOVAPD(fpr.RX(d), R(XMM1));
 	fpr.UnlockAll();
 }
 
@@ -96,26 +100,30 @@ void Jit64::ps_sign(UGeckoInstruction inst)
 	fpr.UnlockAll();
 }
 
-//add a, b, c
-
-//mov a, b
-//add a, c
-//we need:
-/*
-psq_l
-psq_stu
-*/
-
-/*
-add a,b,a
-*/
-
 //There's still a little bit more optimization that can be squeezed out of this
-void Jit64::tri_op(int d, int a, int b, bool reversible, void (XEmitter::*op)(X64Reg, OpArg))
+void Jit64::tri_op(int d, int a, int b, bool reversible, void (XEmitter::*op)(X64Reg, OpArg), UGeckoInstruction inst, bool roundRHS)
 {
 	fpr.Lock(d, a, b);
 
-	if (d == a)
+	if (roundRHS)
+	{
+		if (d == a)
+		{
+			fpr.BindToRegister(d, true);
+			MOVAPD(XMM0, fpr.R(b));
+			Force25BitPrecision(XMM0, XMM1);
+			(this->*op)(fpr.RX(d), R(XMM0));
+		}
+		else
+		{
+			fpr.BindToRegister(d, d == b);
+			if (d != b)
+				MOVAPD(fpr.RX(d), fpr.R(b));
+			Force25BitPrecision(fpr.RX(d), XMM0);
+			(this->*op)(fpr.RX(d), fpr.R(a));
+		}
+	}
+	else if (d == a)
 	{
 		fpr.BindToRegister(d, true);
 		(this->*op)(fpr.RX(d), fpr.R(b));
@@ -132,7 +140,7 @@ void Jit64::tri_op(int d, int a, int b, bool reversible, void (XEmitter::*op)(X6
 			MOVAPD(XMM0, fpr.R(b));
 			fpr.BindToRegister(d, false);
 			MOVAPD(fpr.RX(d), fpr.R(a));
-			(this->*op)(fpr.RX(d), Gen::R(XMM0));
+			(this->*op)(fpr.RX(d), R(XMM0));
 		}
 	}
 	else
@@ -143,6 +151,7 @@ void Jit64::tri_op(int d, int a, int b, bool reversible, void (XEmitter::*op)(X6
 		(this->*op)(fpr.RX(d), fpr.R(b));
 	}
 	ForceSinglePrecisionP(fpr.RX(d));
+	SetFPRFIfNeeded(inst, fpr.RX(d));
 	fpr.UnlockAll();
 }
 
@@ -154,12 +163,21 @@ void Jit64::ps_arith(UGeckoInstruction inst)
 
 	switch (inst.SUBOP5)
 	{
-	case 18: tri_op(inst.FD, inst.FA, inst.FB, false, &XEmitter::DIVPD); break; //div
-	case 20: tri_op(inst.FD, inst.FA, inst.FB, false, &XEmitter::SUBPD); break; //sub
-	case 21: tri_op(inst.FD, inst.FA, inst.FB, true,  &XEmitter::ADDPD); break; //add
-	case 25: tri_op(inst.FD, inst.FA, inst.FC, true, &XEmitter::MULPD); break; //mul
+	case 18: // div
+		tri_op(inst.FD, inst.FA, inst.FB, false, &XEmitter::DIVPD, inst);
+		break;
+	case 20: // sub
+		tri_op(inst.FD, inst.FA, inst.FB, false, &XEmitter::SUBPD, inst);
+		break;
+	case 21: // add
+		tri_op(inst.FD, inst.FA, inst.FB, true, &XEmitter::ADDPD, inst);
+		break;
+	case 25: // mul
+		tri_op(inst.FD, inst.FA, inst.FC, true, &XEmitter::MULPD, inst, true);
+		break;
 	default:
 		_assert_msg_(DYNA_REC, 0, "ps_arith WTF!!!");
+		break;
 	}
 }
 
@@ -167,40 +185,33 @@ void Jit64::ps_sum(UGeckoInstruction inst)
 {
 	INSTRUCTION_START
 	JITDISABLE(bJITPairedOff);
-
-	// TODO: (inst.SUBOP5 == 10) breaks Sonic Colours (black screen)
-	FALLBACK_IF(inst.Rc || (inst.SUBOP5 == 10));
+	FALLBACK_IF(inst.Rc);
 
 	int d = inst.FD;
 	int a = inst.FA;
 	int b = inst.FB;
 	int c = inst.FC;
 	fpr.Lock(a,b,c,d);
-	fpr.BindToRegister(d, d == a || d == b || d == c, true);
 	switch (inst.SUBOP5)
 	{
 	case 10:
-		// Do the sum in upper subregisters, merge uppers
-		MOVDDUP(XMM0, fpr.R(a));
-		MOVAPD(XMM1, fpr.R(b));
-		ADDPD(XMM0, R(XMM1));
-		UNPCKHPD(XMM0, fpr.R(c)); //merge
-		MOVAPD(fpr.R(d), XMM0);
+		MOVDDUP(XMM0, fpr.R(a));  // {a.ps0, a.ps0}
+		ADDPD(XMM0, fpr.R(b));    // {a.ps0 + b.ps0, a.ps0 + b.ps1}
+		UNPCKHPD(XMM0, fpr.R(c)); // {a.ps0 + b.ps1, c.ps1}
 		break;
 	case 11:
-		// Do the sum in lower subregisters, merge lowers
-		MOVAPD(XMM0, fpr.R(a));
-		MOVAPD(XMM1, fpr.R(b));
-		SHUFPD(XMM1, R(XMM1), 5); // copy higher to lower
-		ADDPD(XMM0, R(XMM1)); // sum lowers
-		MOVAPD(XMM1, fpr.R(c));
-		UNPCKLPD(XMM1, R(XMM0)); // merge
-		MOVAPD(fpr.R(d), XMM1);
+		MOVDDUP(XMM1, fpr.R(a));  // {a.ps0, a.ps0}
+		ADDPD(XMM1, fpr.R(b));    // {a.ps0 + b.ps0, a.ps0 + b.ps1}
+		MOVAPD(XMM0, fpr.R(c));
+		SHUFPD(XMM0, R(XMM1), 2); // {c.ps0, a.ps0 + b.ps1}
 		break;
 	default:
 		PanicAlert("ps_sum WTF!!!");
 	}
-	ForceSinglePrecisionP(fpr.RX(d));
+	ForceSinglePrecisionP(XMM0);
+	SetFPRFIfNeeded(inst, XMM0);
+	fpr.BindToRegister(d, false);
+	MOVAPD(fpr.RX(d), R(XMM0));
 	fpr.UnlockAll();
 }
 
@@ -215,34 +226,28 @@ void Jit64::ps_muls(UGeckoInstruction inst)
 	int a = inst.FA;
 	int c = inst.FC;
 	fpr.Lock(a, c, d);
-	fpr.BindToRegister(d, d == a || d == c, true);
 	switch (inst.SUBOP5)
 	{
 	case 12:
-		// Single multiply scalar high
-		// TODO - faster version for when regs are different
-		MOVAPD(XMM0, fpr.R(a));
-		MOVDDUP(XMM1, fpr.R(c));
-		MULPD(XMM0, R(XMM1));
-		MOVAPD(fpr.R(d), XMM0);
+		MOVDDUP(XMM0, fpr.R(c));
 		break;
 	case 13:
-		// TODO - faster version for when regs are different
-		MOVAPD(XMM0, fpr.R(a));
-		MOVAPD(XMM1, fpr.R(c));
-		SHUFPD(XMM1, R(XMM1), 3); // copy higher to lower
-		MULPD(XMM0, R(XMM1));
-		MOVAPD(fpr.R(d), XMM0);
+		MOVAPD(XMM0, fpr.R(c));
+		SHUFPD(XMM0, R(XMM0), 3);
 		break;
 	default:
 		PanicAlert("ps_muls WTF!!!");
 	}
-	ForceSinglePrecisionP(fpr.RX(d));
+	Force25BitPrecision(XMM0, XMM1);
+	MULPD(XMM0, fpr.R(a));
+	ForceSinglePrecisionP(XMM0);
+	SetFPRFIfNeeded(inst, XMM0);
+	fpr.BindToRegister(d, false);
+	MOVAPD(fpr.RX(d), R(XMM0));
 	fpr.UnlockAll();
 }
 
 
-//TODO: find easy cases and optimize them, do a breakout like ps_arith
 void Jit64::ps_mergeXX(UGeckoInstruction inst)
 {
 	INSTRUCTION_START
@@ -273,10 +278,63 @@ void Jit64::ps_mergeXX(UGeckoInstruction inst)
 		_assert_msg_(DYNA_REC, 0, "ps_merge - invalid op");
 	}
 	fpr.BindToRegister(d, false);
-	MOVAPD(fpr.RX(d), Gen::R(XMM0));
+	MOVAPD(fpr.RX(d), R(XMM0));
 	fpr.UnlockAll();
 }
 
+void Jit64::ps_rsqrte(UGeckoInstruction inst)
+{
+	INSTRUCTION_START
+	JITDISABLE(bJITFloatingPointOff);
+	FALLBACK_IF(inst.Rc);
+	int b = inst.FB;
+	int d = inst.FD;
+
+	gpr.FlushLockX(RSCRATCH_EXTRA);
+	fpr.Lock(b, d);
+	fpr.BindToRegister(b, true, false);
+	fpr.BindToRegister(d, false);
+
+	MOVSD(XMM0, fpr.R(b));
+	CALL((void *)asm_routines.frsqrte);
+	MOVSD(fpr.R(d), XMM0);
+
+	MOVHLPS(XMM0, fpr.RX(b));
+	CALL((void *)asm_routines.frsqrte);
+	MOVLHPS(fpr.RX(d), XMM0);
+
+	ForceSinglePrecisionP(fpr.RX(d));
+	SetFPRFIfNeeded(inst, fpr.RX(d));
+	fpr.UnlockAll();
+	gpr.UnlockAllX();
+}
+
+void Jit64::ps_res(UGeckoInstruction inst)
+{
+	INSTRUCTION_START
+	JITDISABLE(bJITFloatingPointOff);
+	FALLBACK_IF(inst.Rc);
+	int b = inst.FB;
+	int d = inst.FD;
+
+	gpr.FlushLockX(RSCRATCH_EXTRA);
+	fpr.Lock(b, d);
+	fpr.BindToRegister(b, true, false);
+	fpr.BindToRegister(d, false);
+
+	MOVSD(XMM0, fpr.R(b));
+	CALL((void *)asm_routines.fres);
+	MOVSD(fpr.R(d), XMM0);
+
+	MOVHLPS(XMM0, fpr.RX(b));
+	CALL((void *)asm_routines.fres);
+	MOVLHPS(fpr.RX(d), XMM0);
+
+	ForceSinglePrecisionP(fpr.RX(d));
+	SetFPRFIfNeeded(inst, fpr.RX(d));
+	fpr.UnlockAll();
+	gpr.UnlockAllX();
+}
 
 //TODO: add optimized cases
 void Jit64::ps_maddXX(UGeckoInstruction inst)
@@ -291,35 +349,46 @@ void Jit64::ps_maddXX(UGeckoInstruction inst)
 	int d = inst.FD;
 	fpr.Lock(a,b,c,d);
 
-	MOVAPD(XMM0, fpr.R(a));
 	switch (inst.SUBOP5)
 	{
 	case 14: //madds0
 		MOVDDUP(XMM1, fpr.R(c));
+		Force25BitPrecision(XMM1, XMM0);
+		MOVAPD(XMM0, fpr.R(a));
 		MULPD(XMM0, R(XMM1));
 		ADDPD(XMM0, fpr.R(b));
 		break;
 	case 15: //madds1
 		MOVAPD(XMM1, fpr.R(c));
 		SHUFPD(XMM1, R(XMM1), 3); // copy higher to lower
+		Force25BitPrecision(XMM1, XMM0);
+		MOVAPD(XMM0, fpr.R(a));
 		MULPD(XMM0, R(XMM1));
 		ADDPD(XMM0, fpr.R(b));
 		break;
 	case 28: //msub
-		MULPD(XMM0, fpr.R(c));
+		MOVAPD(XMM0, fpr.R(c));
+		Force25BitPrecision(XMM0, XMM1);
+		MULPD(XMM0, fpr.R(a));
 		SUBPD(XMM0, fpr.R(b));
 		break;
 	case 29: //madd
-		MULPD(XMM0, fpr.R(c));
+		MOVAPD(XMM0, fpr.R(c));
+		Force25BitPrecision(XMM0, XMM1);
+		MULPD(XMM0, fpr.R(a));
 		ADDPD(XMM0, fpr.R(b));
 		break;
 	case 30: //nmsub
-		MULPD(XMM0, fpr.R(c));
+		MOVAPD(XMM0, fpr.R(c));
+		Force25BitPrecision(XMM0, XMM1);
+		MULPD(XMM0, fpr.R(a));
 		SUBPD(XMM0, fpr.R(b));
 		PXOR(XMM0, M((void*)&psSignBits));
 		break;
 	case 31: //nmadd
-		MULPD(XMM0, fpr.R(c));
+		MOVAPD(XMM0, fpr.R(c));
+		Force25BitPrecision(XMM0, XMM1);
+		MULPD(XMM0, fpr.R(a));
 		ADDPD(XMM0, fpr.R(b));
 		PXOR(XMM0, M((void*)&psSignBits));
 		break;
@@ -330,7 +399,17 @@ void Jit64::ps_maddXX(UGeckoInstruction inst)
 		return;
 	}
 	fpr.BindToRegister(d, false);
-	MOVAPD(fpr.RX(d), Gen::R(XMM0));
-	ForceSinglePrecisionP(fpr.RX(d));
+	ForceSinglePrecisionP(XMM0);
+	SetFPRFIfNeeded(inst, XMM0);
+	MOVAPD(fpr.RX(d), R(XMM0));
 	fpr.UnlockAll();
+}
+
+void Jit64::ps_cmpXX(UGeckoInstruction inst)
+{
+	INSTRUCTION_START
+	JITDISABLE(bJITFloatingPointOff);
+	FALLBACK_IF(jo.fpAccurateFcmp);
+
+	FloatCompare(inst, !!(inst.SUBOP10 & 64));
 }

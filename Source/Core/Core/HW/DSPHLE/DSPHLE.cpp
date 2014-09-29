@@ -39,7 +39,7 @@ struct DSPState
 	}
 };
 
-bool DSPHLE::Initialize(void *hWnd, bool bWii, bool bDSPThread)
+bool DSPHLE::Initialize(bool bWii, bool bDSPThread)
 {
 	m_bWii = bWii;
 	m_pUCode = nullptr;
@@ -66,10 +66,8 @@ void DSPHLE::Shutdown()
 
 void DSPHLE::DSP_Update(int cycles)
 {
-	// This is called OFTEN - better not do anything expensive!
-	// ~1/6th as many cycles as the period PPC-side.
 	if (m_pUCode != nullptr)
-		m_pUCode->Update(cycles / 6);
+		m_pUCode->Update();
 }
 
 u32 DSPHLE::DSP_UpdateRate()
@@ -84,7 +82,8 @@ u32 DSPHLE::DSP_UpdateRate()
 
 void DSPHLE::SendMailToDSP(u32 _uMail)
 {
-	if (m_pUCode != nullptr) {
+	if (m_pUCode != nullptr)
+	{
 		DEBUG_LOG(DSP_MAIL, "CPU writes 0x%08x", _uMail);
 		m_pUCode->HandleMail(_uMail);
 	}

@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "Common/IniFile.h"
 #include "Common/StringUtil.h"
-
 #include "Core/GeckoCodeConfig.h"
 
 namespace Gecko
@@ -149,4 +149,4 @@ void SaveCodes(IniFile& inifile, const std::vector<GeckoCode>& gcodes)
 	inifile.SetLines("Gecko_Enabled", enabledLines);
 }
 
-};
+}

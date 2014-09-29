@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "VideoCommon/NativeVertexFormat.h"
 
 namespace VertexLoaderManager
@@ -17,12 +17,13 @@ namespace VertexLoaderManager
 	void MarkAllDirty();
 
 	int GetVertexSize(int vtx_attr_group);
-	void RunVertices(int vtx_attr_group, int primitive, int count);
+	// Returns false if buf_size is insufficient.
+	bool RunVertices(int vtx_attr_group, int primitive, int count, size_t buf_size, bool skip_drawing = false);
 
 	// For debugging
 	void AppendListToString(std::string *dest);
 
-	NativeVertexFormat* GetNativeVertexFormat(const PortableVertexDeclaration& format, u32 components);
-};
+	NativeVertexFormat* GetCurrentVertexFormat();
+}
 
 void RecomputeCachedArraybases();

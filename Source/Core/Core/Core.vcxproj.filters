@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="ActionReplay">
@@ -146,7 +146,6 @@
     <ClCompile Include="NetPlayServer.cpp" />
     <ClCompile Include="PatchEngine.cpp" />
     <ClCompile Include="State.cpp" />
-    <ClCompile Include="Tracer.cpp" />
     <ClCompile Include="VolumeHandler.cpp" />
     <ClCompile Include="x64MemTools.cpp" />
     <ClCompile Include="ActionReplay.cpp">
@@ -512,6 +511,9 @@
     <ClCompile Include="HW\SystemTimers.cpp">
       <Filter>HW %28Flipper/Hollywood%29</Filter>
     </ClCompile>
+    <ClCompile Include="HW\WiiSaveCrypted.cpp">
+      <Filter>HW %28Flipper/Hollywood%29</Filter>
+    </ClCompile>
     <ClCompile Include="DSP\DSPAssembler.cpp">
       <Filter>DSPCore</Filter>
     </ClCompile>
@@ -638,6 +640,9 @@
     <ClCompile Include="PowerPC\JitCommon\JitCache.cpp">
       <Filter>PowerPC\JitCommon</Filter>
     </ClCompile>
+    <ClCompile Include="PowerPC\JitCommon\TrampolineCache.cpp">
+      <Filter>PowerPC\JitCommon</Filter>
+    </ClCompile>
     <ClCompile Include="PowerPC\Jit64IL\IR_X86.cpp">
       <Filter>PowerPC\JitIL</Filter>
     </ClCompile>
@@ -677,7 +682,6 @@
     <ClCompile Include="PowerPC\Jit64\JitRegCache.cpp">
       <Filter>PowerPC\Jit64</Filter>
     </ClCompile>
-    <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="PowerPC\JitILCommon\JitILBase_Branch.cpp">
       <Filter>PowerPC\JitILCommon</Filter>
     </ClCompile>
@@ -721,7 +725,6 @@
     <ClInclude Include="NetPlayServer.h" />
     <ClInclude Include="PatchEngine.h" />
     <ClInclude Include="State.h" />
-    <ClInclude Include="Tracer.h" />
     <ClInclude Include="VolumeHandler.h" />
     <ClInclude Include="ActionReplay.h">
       <Filter>ActionReplay</Filter>
@@ -733,12 +736,6 @@
       <Filter>Boot</Filter>
     </ClInclude>
     <ClInclude Include="Boot\Boot_DOL.h">
-      <Filter>Boot</Filter>
-    </ClInclude>
-    <ClInclude Include="Boot\Boot_ELF.h">
-      <Filter>Boot</Filter>
-    </ClInclude>
-    <ClInclude Include="Boot\Boot_WiiWAD.h">
       <Filter>Boot</Filter>
     </ClInclude>
     <ClInclude Include="Boot\ElfReader.h">
@@ -772,9 +769,6 @@
       <Filter>DSPCore\Interpreter</Filter>
     </ClInclude>
     <ClInclude Include="DSP\Jit\DSPJitRegCache.h">
-      <Filter>DSPCore\Jit</Filter>
-    </ClInclude>
-    <ClInclude Include="DSP\Jit\DSPJitUtil.h">
       <Filter>DSPCore\Jit</Filter>
     </ClInclude>
     <ClInclude Include="DSP\DSPEmitter.h">
@@ -1038,6 +1032,9 @@
     <ClInclude Include="HW\SystemTimers.h">
       <Filter>HW %28Flipper/Hollywood%29</Filter>
     </ClInclude>
+    <ClInclude Include="HW\WiiSaveCrypted.h">
+      <Filter>HW %28Flipper/Hollywood%29</Filter>
+    </ClInclude>
     <ClInclude Include="DSP\DSPAssembler.h">
       <Filter>DSPCore</Filter>
     </ClInclude>
@@ -1106,9 +1103,6 @@
     </ClInclude>
     <ClInclude Include="IPC_HLE\WII_IPC_HLE_Device_usb_kbd.h">
       <Filter>IPC HLE %28IOS/Starlet%29\Keyboard</Filter>
-    </ClInclude>
-    <ClInclude Include="IPC_HLE\fakepoll.h">
-      <Filter>IPC HLE %28IOS/Starlet%29\Net</Filter>
     </ClInclude>
     <ClInclude Include="IPC_HLE\ICMP.h">
       <Filter>IPC HLE %28IOS/Starlet%29\Net</Filter>
@@ -1191,6 +1185,9 @@
     <ClInclude Include="PowerPC\JitCommon\JitCache.h">
       <Filter>PowerPC\JitCommon</Filter>
     </ClInclude>
+    <ClInclude Include="PowerPC\JitCommon\TrampolineCache.h">
+      <Filter>PowerPC\JitCommon</Filter>
+    </ClInclude>
     <ClInclude Include="PowerPC\Jit64IL\JitIL.h">
       <Filter>PowerPC\JitIL</Filter>
     </ClInclude>
@@ -1203,7 +1200,6 @@
     <ClInclude Include="PowerPC\Jit64\JitAsm.h">
       <Filter>PowerPC\Jit64</Filter>
     </ClInclude>
-    <ClInclude Include="stdafx.h" />
     <ClInclude Include="PowerPC\JitILCommon\JitILBase.h">
       <Filter>PowerPC\JitILCommon</Filter>
     </ClInclude>

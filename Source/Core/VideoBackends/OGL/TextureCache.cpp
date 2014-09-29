@@ -7,15 +7,7 @@
 #include <vector>
 
 #ifdef _WIN32
-#define _interlockedbittestandset workaround_ms_header_bug_platform_sdk6_set
-#define _interlockedbittestandreset workaround_ms_header_bug_platform_sdk6_reset
-#define _interlockedbittestandset64 workaround_ms_header_bug_platform_sdk6_set64
-#define _interlockedbittestandreset64 workaround_ms_header_bug_platform_sdk6_reset64
 #include <intrin.h>
-#undef _interlockedbittestandset
-#undef _interlockedbittestandreset
-#undef _interlockedbittestandset64
-#undef _interlockedbittestandreset64
 #endif
 
 #include "Common/CommonPaths.h"
@@ -27,6 +19,7 @@
 #include "Core/HW/Memmap.h"
 
 #include "VideoBackends/OGL/FramebufferManager.h"
+#include "VideoBackends/OGL/GLInterfaceBase.h"
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 #include "VideoBackends/OGL/Render.h"
 #include "VideoBackends/OGL/TextureCache.h"
@@ -281,12 +274,14 @@ void TextureCache::TCacheEntry::FromRenderTarget(u32 dstAddr, unsigned int dstFo
 
 		glViewport(0, 0, virtual_width, virtual_height);
 
+		GLuint uniform_location;
 		if (srcFormat == PEControl::Z24)
 		{
 			s_DepthMatrixProgram.Bind();
 			if (s_DepthCbufid != cbufid)
 				glUniform4fv(s_DepthMatrixUniform, 5, colmat);
 			s_DepthCbufid = cbufid;
+			uniform_location = s_DepthCopyPositionUniform;
 		}
 		else
 		{
@@ -294,11 +289,12 @@ void TextureCache::TCacheEntry::FromRenderTarget(u32 dstAddr, unsigned int dstFo
 			if (s_ColorCbufid != cbufid)
 				glUniform4fv(s_ColorMatrixUniform, 7, colmat);
 			s_ColorCbufid = cbufid;
+			uniform_location = s_ColorCopyPositionUniform;
 		}
 
 		TargetRectangle R = g_renderer->ConvertEFBRectangle(srcRect);
-		glUniform4f(srcFormat == PEControl::Z24 ? s_DepthCopyPositionUniform : s_ColorCopyPositionUniform,
-			R.left, R.top, R.right, R.bottom);
+		glUniform4f(uniform_location, static_cast<float>(R.left), static_cast<float>(R.top),
+			static_cast<float>(R.right), static_cast<float>(R.bottom));
 		GL_REPORT_ERRORD();
 
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -365,9 +361,29 @@ TextureCache::TextureCache()
 		"\n"
 		"void main(){\n"
 		"	vec4 texcol = texture(samp9, uv0);\n"
-		"	vec4 EncodedDepth = fract((texcol.r * (16777215.0/16777216.0)) * vec4(1.0,256.0,256.0*256.0,1.0));\n"
-		"	texcol = round(EncodedDepth * (16777216.0/16777215.0) * vec4(255.0,255.0,255.0,15.0)) / vec4(255.0,255.0,255.0,15.0);\n"
-		"	ocol0 = texcol * mat4(colmat[0], colmat[1], colmat[2], colmat[3]) + colmat[4];"
+
+		// 255.99998474121 = 16777215/16777216*256
+		"	float workspace = texcol.x * 255.99998474121;\n"
+
+		"	texcol.x = floor(workspace);\n"         // x component
+
+		"	workspace = workspace - texcol.x;\n"    // subtract x component out
+		"	workspace = workspace * 256.0;\n"       // shift left 8 bits
+		"	texcol.y = floor(workspace);\n"         // y component
+
+		"	workspace = workspace - texcol.y;\n"    // subtract y component out
+		"	workspace = workspace * 256.0;\n"       // shift left 8 bits
+		"	texcol.z = floor(workspace);\n"         // z component
+
+		"	texcol.w = texcol.x;\n"                 // duplicate x into w
+
+		"	texcol = texcol / 255.0;\n"             // normalize components to [0.0..1.0]
+
+		"	texcol.w = texcol.w * 15.0;\n"
+		"	texcol.w = floor(texcol.w);\n"
+		"	texcol.w = texcol.w / 15.0;\n"          // w component
+
+		"	ocol0 = texcol * mat4(colmat[0], colmat[1], colmat[2], colmat[3]) + colmat[4];\n"
 		"}\n";
 
 	const char *VProgram =

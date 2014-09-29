@@ -4,14 +4,12 @@
 
 #pragma once
 
-#include <functional>
 #include <map>
 #include <queue>
 #include <sstream>
 
 #include <SFML/Network.hpp>
 
-#include "Common/Common.h"
 #include "Common/CommonTypes.h"
 #include "Common/FifoQueue.h"
 #include "Common/Thread.h"
@@ -34,7 +32,7 @@ public:
 class NetPlayUI
 {
 public:
-	virtual ~NetPlayUI() {};
+	virtual ~NetPlayUI() {}
 
 	virtual void BootGame(const std::string& filename) = 0;
 	virtual void StopGame() = 0;

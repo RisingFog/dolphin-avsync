@@ -8,13 +8,16 @@
 #import <AppKit/AppKit.h>
 #endif
 
-#include "DolphinWX/GLInterface/InterfaceBase.h"
+#include "VideoBackends/OGL/GLInterfaceBase.h"
 
 class cInterfaceAGL : public cInterfaceBase
 {
+private:
+	NSView *cocoaWin;
+	NSOpenGLContext *cocoaCtx;
 public:
 	void Swap();
-	bool Create(void *&window_handle);
+	bool Create(void *window_handle);
 	bool MakeCurrent();
 	bool ClearCurrent();
 	void Shutdown();

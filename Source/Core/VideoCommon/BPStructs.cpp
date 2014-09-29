@@ -6,6 +6,7 @@
 
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
+#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 
@@ -219,7 +220,7 @@ static void BPWritten(const BPCmd& bp)
 
 				CopyEFB(destAddr, srcRect,
 					PE_copy.tp_realFormat(), bpmem.zcontrol.pixel_format,
-					PE_copy.intensity_fmt, PE_copy.half_scale);
+					!!PE_copy.intensity_fmt, !!PE_copy.half_scale);
 			}
 			else
 			{
@@ -235,19 +236,19 @@ static void BPWritten(const BPCmd& bp)
 				else
 					yScale = (float)bpmem.dispcopyyscale / 256.0f;
 
-				float xfbLines = ((bpmem.copyTexSrcWH.y + 1.0f) * yScale);
-				if ((u32)xfbLines > MAX_XFB_HEIGHT)
+				float num_xfb_lines = ((bpmem.copyTexSrcWH.y + 1.0f) * yScale);
+
+				u32 height = static_cast<u32>(num_xfb_lines);
+				if (height > MAX_XFB_HEIGHT)
 				{
-					INFO_LOG(VIDEO, "Tried to scale EFB to too many XFB lines (%f)", xfbLines);
-					xfbLines = MAX_XFB_HEIGHT;
+					INFO_LOG(VIDEO, "Tried to scale EFB to too many XFB lines: %d (%f)",
+							 height, num_xfb_lines);
+					height = MAX_XFB_HEIGHT;
 				}
 
 				u32 width = bpmem.copyMipMapStrideChannels << 4;
-				u32 height = xfbLines;
 
-				Renderer::RenderToXFB(destAddr, srcRect,
-						      width, height,
-						      s_gammaLUT[PE_copy.gamma]);
+				Renderer::RenderToXFB(destAddr, srcRect, width, height, s_gammaLUT[PE_copy.gamma]);
 			}
 
 			// Clear the rectangular region after copying it.
@@ -268,7 +269,7 @@ static void BPWritten(const BPCmd& bp)
 			u8 *ptr = nullptr;
 
 			// TODO - figure out a cleaner way.
-			if (Core::g_CoreStartupParameter.bWii)
+			if (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii)
 				ptr = Memory::GetPointer(bpmem.tmem_config.tlut_src << 5);
 			else
 				ptr = Memory::GetPointer((bpmem.tmem_config.tlut_src & 0xFFFFF) << 5);
@@ -479,6 +480,55 @@ static void BPWritten(const BPCmd& bp)
 			}
 		}
 		return;
+
+	// ---------------------------------------------------
+	// Set the TEV Color
+	// ---------------------------------------------------
+	//
+	// NOTE: Each of these registers actually maps to two variables internally.
+	//       There's a bit that specifies which one is currently written to.
+	//
+	// NOTE: Some games write only to the RA register (or only to the BG register).
+	//       We may not assume that the unwritten register holds a valid value, hence
+	//       both component pairs need to be loaded individually.
+	case BPMEM_TEV_COLOR_RA:
+	case BPMEM_TEV_COLOR_RA + 2:
+	case BPMEM_TEV_COLOR_RA + 4:
+	case BPMEM_TEV_COLOR_RA + 6:
+	{
+		int num = (bp.address >> 1) & 0x3;
+		if (bpmem.tevregs[num].type_ra)
+		{
+			PixelShaderManager::SetTevKonstColor(num, 0, (s32)bpmem.tevregs[num].red);
+			PixelShaderManager::SetTevKonstColor(num, 3, (s32)bpmem.tevregs[num].alpha);
+		}
+		else
+		{
+			PixelShaderManager::SetTevColor(num, 0, (s32)bpmem.tevregs[num].red);
+			PixelShaderManager::SetTevColor(num, 3, (s32)bpmem.tevregs[num].alpha);
+		}
+		return;
+	}
+
+	case BPMEM_TEV_COLOR_BG:
+	case BPMEM_TEV_COLOR_BG + 2:
+	case BPMEM_TEV_COLOR_BG + 4:
+	case BPMEM_TEV_COLOR_BG + 6:
+	{
+		int num = (bp.address >> 1) & 0x3;
+		if (bpmem.tevregs[num].type_bg)
+		{
+			PixelShaderManager::SetTevKonstColor(num, 1, (s32)bpmem.tevregs[num].green);
+			PixelShaderManager::SetTevKonstColor(num, 2, (s32)bpmem.tevregs[num].blue);
+		}
+		else
+		{
+			PixelShaderManager::SetTevColor(num, 1, (s32)bpmem.tevregs[num].green);
+			PixelShaderManager::SetTevColor(num, 2, (s32)bpmem.tevregs[num].blue);
+		}
+		return;
+	}
+
 	default:
 		break;
 	}
@@ -547,29 +597,6 @@ static void BPWritten(const BPCmd& bp)
 	case BPMEM_TX_SETTLUT_4:
 		return;
 
-	// ---------------------------------------------------
-	// Set the TEV Color
-	// ---------------------------------------------------
-	case BPMEM_TEV_REGISTER_L:   // Reg 1
-	case BPMEM_TEV_REGISTER_H:
-	case BPMEM_TEV_REGISTER_L+2: // Reg 2
-	case BPMEM_TEV_REGISTER_H+2:
-	case BPMEM_TEV_REGISTER_L+4: // Reg 3
-	case BPMEM_TEV_REGISTER_H+4:
-	case BPMEM_TEV_REGISTER_L+6: // Reg 4
-	case BPMEM_TEV_REGISTER_H+6:
-		// some games only send the _L part, so always update
-		// there actually are 2 register behind each of these
-		// addresses, selected by the type bit.
-		{
-			// don't compare with changes!
-			int num = (bp.address >> 1) & 0x3;
-			if ((bp.address & 1) == 0)
-				PixelShaderManager::SetColorChanged(bpmem.tevregs[num].type_ra, num);
-			else
-				PixelShaderManager::SetColorChanged(bpmem.tevregs[num].type_bg, num);
-		}
-		return;
 	default:
 		break;
 	}
@@ -1212,19 +1239,19 @@ void GetBPRegInfo(const u8* data, std::string* name, std::string* desc)
 			break;
 		}
 
-	case BPMEM_TEV_REGISTER_L: // 0xE0
-	case BPMEM_TEV_REGISTER_L+2:
-	case BPMEM_TEV_REGISTER_L+4:
-	case BPMEM_TEV_REGISTER_L+6:
-		SetRegName(BPMEM_TEV_REGISTER_L);
+	case BPMEM_TEV_COLOR_RA: // 0xE0
+	case BPMEM_TEV_COLOR_RA + 2: // 0xE2
+	case BPMEM_TEV_COLOR_RA + 4: // 0xE4
+	case BPMEM_TEV_COLOR_RA + 6: // 0xE6
+		SetRegName(BPMEM_TEV_COLOR_RA);
 		// TODO: Description
 		break;
 
-	case BPMEM_TEV_REGISTER_H: // 0xE1
-	case BPMEM_TEV_REGISTER_H+2:
-	case BPMEM_TEV_REGISTER_H+4:
-	case BPMEM_TEV_REGISTER_H+6:
-		SetRegName(BPMEM_TEV_REGISTER_H);
+	case BPMEM_TEV_COLOR_BG: // 0xE1
+	case BPMEM_TEV_COLOR_BG + 2: // 0xE3
+	case BPMEM_TEV_COLOR_BG + 4: // 0xE5
+	case BPMEM_TEV_COLOR_BG + 6: // 0xE7
+		SetRegName(BPMEM_TEV_COLOR_BG);
 		// TODO: Description
 		break;
 

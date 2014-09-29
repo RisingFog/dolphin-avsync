@@ -142,6 +142,8 @@ void WiimoteScanner::FindWiimotes(std::vector<Wiimote*> & found_wiimotes, Wiimot
 	if ([bti start] != kIOReturnSuccess)
 	{
 		ERROR_LOG(WIIMOTE, "Unable to do bluetooth discovery");
+		[bth release];
+		[sbt release];
 		return;
 	}
 
@@ -221,6 +223,7 @@ bool Wiimote::ConnectInternal()
 	{
 		ERROR_LOG(WIIMOTE, "Unable to open Bluetooth connection to wiimote %i: %x",
 		          index + 1, ret);
+		[cbt release];
 		return false;
 	}
 
@@ -325,4 +328,4 @@ int Wiimote::IOWrite(const unsigned char *buf, size_t len)
 		return 0;
 }
 
-};
+}

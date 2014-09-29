@@ -174,8 +174,12 @@ namespace JitILProfiler
 		u64 codeHash;
 		u64 totalElapsed;
 		u64 numberOfCalls;
-		Block() : index(0), codeHash(0), totalElapsed(0), numberOfCalls(0) { }
+
+		Block() : index(0), codeHash(0), totalElapsed(0), numberOfCalls(0)
+		{
+		}
 	};
+
 	static std::vector<Block> blocks;
 	static u32 blockIndex;
 	static u64 beginTime;
@@ -188,6 +192,7 @@ namespace JitILProfiler
 		block.codeHash = codeHash;
 		return block;
 	}
+
 	// These functions need to be static because they are called with
 	// ABI_CallFunction().
 	static void Begin(u32 index)
@@ -195,6 +200,7 @@ namespace JitILProfiler
 		blockIndex = index;
 		beginTime = __rdtsc();
 	}
+
 	static void End()
 	{
 		const u64 endTime = __rdtsc();
@@ -203,6 +209,7 @@ namespace JitILProfiler
 		block.totalElapsed += duration;
 		++block.numberOfCalls;
 	}
+
 	struct JitILProfilerFinalizer
 	{
 		virtual ~JitILProfilerFinalizer()
@@ -221,54 +228,60 @@ namespace JitILProfiler
 			}
 		}
 	};
+
 	static std::unique_ptr<JitILProfilerFinalizer> finalizer;
 	static void Init()
 	{
 		finalizer = std::make_unique<JitILProfilerFinalizer>();
 	}
+
 	static void Shutdown()
 	{
 		finalizer.reset();
 	}
 };
 
-static int CODE_SIZE = 1024*1024*32;
-
 void JitIL::Init()
 {
 	jo.optimizeStack = true;
 
-	if (Core::g_CoreStartupParameter.bEnableDebugging)
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
 	{
 		jo.enableBlocklink = false;
-		Core::g_CoreStartupParameter.bSkipIdle = false;
+		SConfig::GetInstance().m_LocalCoreStartupParameter.bSkipIdle = false;
 	}
 	else
 	{
-		if (!Core::g_CoreStartupParameter.bJITBlockLinking)
+		if (!SConfig::GetInstance().m_LocalCoreStartupParameter.bJITBlockLinking)
+		{
 			jo.enableBlocklink = false;
+		}
 		else
+		{
 			// Speed boost, but not 100% safe
-			jo.enableBlocklink = !Core::g_CoreStartupParameter.bMMU;
+			jo.enableBlocklink = !SConfig::GetInstance().m_LocalCoreStartupParameter.bMMU;
+		}
 	}
 
 	jo.fpAccurateFcmp = false;
 	jo.optimizeGatherPipe = true;
 	jo.fastInterrupts = false;
 	jo.accurateSinglePrecision = false;
-	js.memcheck = Core::g_CoreStartupParameter.bMMU;
+	js.memcheck = SConfig::GetInstance().m_LocalCoreStartupParameter.bMMU;
 
 	trampolines.Init();
 	AllocCodeSpace(CODE_SIZE);
-
 	blocks.Init();
-	asm_routines.Init();
+	asm_routines.Init(nullptr);
+
+	farcode.Init(js.memcheck ? FARCODE_SIZE_MMU : FARCODE_SIZE);
 
 	code_block.m_stats = &js.st;
 	code_block.m_gpa = &js.gpa;
 	code_block.m_fpa = &js.fpa;
 
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		JitILProfiler::Init();
 	}
 }
@@ -282,7 +295,8 @@ void JitIL::ClearCache()
 
 void JitIL::Shutdown()
 {
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		JitILProfiler::Shutdown();
 	}
 
@@ -291,6 +305,7 @@ void JitIL::Shutdown()
 	blocks.Shutdown();
 	trampolines.Shutdown();
 	asm_routines.Shutdown();
+	farcode.Shutdown();
 }
 
 
@@ -298,15 +313,15 @@ void JitIL::WriteCallInterpreter(UGeckoInstruction inst)
 {
 	if (js.isLastInstruction)
 	{
-		MOV(32, M(&PC), Imm32(js.compilerPC));
-		MOV(32, M(&NPC), Imm32(js.compilerPC + 4));
+		MOV(32, PPCSTATE(pc), Imm32(js.compilerPC));
+		MOV(32, PPCSTATE(npc), Imm32(js.compilerPC + 4));
 	}
 	Interpreter::_interpreterInstruction instr = GetInterpreterOp(inst);
 	ABI_CallFunctionC((void*)instr, inst.hex);
 	if (js.isLastInstruction)
 	{
-		MOV(32, R(EAX), M(&NPC));
-		WriteRfiExitDestInOpArg(R(EAX));
+		MOV(32, R(RSCRATCH), PPCSTATE(npc));
+		WriteRfiExitDestInOpArg(R(RSCRATCH));
 	}
 }
 
@@ -326,8 +341,8 @@ void JitIL::FallBackToInterpreter(UGeckoInstruction _inst)
 void JitIL::HLEFunction(UGeckoInstruction _inst)
 {
 	ABI_CallFunctionCC((void*)&HLE::Execute, js.compilerPC, _inst.hex);
-	MOV(32, R(EAX), M(&NPC));
-	WriteExitDestInOpArg(R(EAX));
+	MOV(32, R(RSCRATCH), PPCSTATE(npc));
+	WriteExitDestInOpArg(R(RSCRATCH));
 }
 
 void JitIL::DoNothing(UGeckoInstruction _inst)
@@ -346,21 +361,20 @@ static void ImHere()
 	{
 		if (!f)
 		{
-#if _M_X86_64
 			f.Open("log64.txt", "w");
-#else
-			f.Open("log32.txt", "w");
-#endif
 		}
 		fprintf(f.GetHandle(), "%08x r0: %08x r5: %08x r6: %08x\n", PC, PowerPC::ppcState.gpr[0],
 			PowerPC::ppcState.gpr[5], PowerPC::ppcState.gpr[6]);
 		f.Flush();
 	}
-	if (been_here.find(PC) != been_here.end()) {
+
+	if (been_here.find(PC) != been_here.end())
+	{
 		been_here.find(PC)->second++;
 		if ((been_here.find(PC)->second) & 1023)
 			return;
 	}
+
 	DEBUG_LOG(DYNA_REC, "I'm here - PC = %08x , LR = %08x", PC, LR);
 	been_here[PC] = 1;
 }
@@ -380,10 +394,11 @@ void JitIL::Cleanup()
 void JitIL::WriteExit(u32 destination)
 {
 	Cleanup();
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		ABI_CallFunction((void *)JitILProfiler::End);
 	}
-	SUB(32, M(&PowerPC::ppcState.downcount), js.downcountAmount > 127 ? Imm32(js.downcountAmount) : Imm8(js.downcountAmount));
+	SUB(32, PPCSTATE(downcount), Imm32(js.downcountAmount));
 
 	//If nobody has taken care of this yet (this can be removed when all branches are done)
 	JitBlock *b = js.curBlock;
@@ -402,7 +417,7 @@ void JitIL::WriteExit(u32 destination)
 	}
 	else
 	{
-		MOV(32, M(&PC), Imm32(destination));
+		MOV(32, PPCSTATE(pc), Imm32(destination));
 		JMP(asm_routines.dispatcher, true);
 	}
 	b->linkData.push_back(linkData);
@@ -410,38 +425,41 @@ void JitIL::WriteExit(u32 destination)
 
 void JitIL::WriteExitDestInOpArg(const Gen::OpArg& arg)
 {
-	MOV(32, M(&PC), arg);
+	MOV(32, PPCSTATE(pc), arg);
 	Cleanup();
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		ABI_CallFunction((void *)JitILProfiler::End);
 	}
-	SUB(32, M(&PowerPC::ppcState.downcount), js.downcountAmount > 127 ? Imm32(js.downcountAmount) : Imm8(js.downcountAmount));
+	SUB(32, PPCSTATE(downcount), Imm32(js.downcountAmount));
 	JMP(asm_routines.dispatcher, true);
 }
 
 void JitIL::WriteRfiExitDestInOpArg(const Gen::OpArg& arg)
 {
-	MOV(32, M(&PC), arg);
-	MOV(32, M(&NPC), arg);
+	MOV(32, PPCSTATE(pc), arg);
+	MOV(32, PPCSTATE(npc), arg);
 	Cleanup();
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		ABI_CallFunction((void *)JitILProfiler::End);
 	}
 	ABI_CallFunction(reinterpret_cast<void *>(&PowerPC::CheckExceptions));
-	SUB(32, M(&PowerPC::ppcState.downcount), js.downcountAmount > 127 ? Imm32(js.downcountAmount) : Imm8(js.downcountAmount));
+	SUB(32, PPCSTATE(downcount), Imm32(js.downcountAmount));
 	JMP(asm_routines.dispatcher, true);
 }
 
 void JitIL::WriteExceptionExit()
 {
 	Cleanup();
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling) {
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling)
+	{
 		ABI_CallFunction((void *)JitILProfiler::End);
 	}
-	MOV(32, R(EAX), M(&PC));
-	MOV(32, M(&NPC), R(EAX));
+	MOV(32, R(EAX), PPCSTATE(pc));
+	MOV(32, PPCSTATE(npc), R(EAX));
 	ABI_CallFunction(reinterpret_cast<void *>(&PowerPC::CheckExceptions));
-	SUB(32, M(&PowerPC::ppcState.downcount), js.downcountAmount > 127 ? Imm32(js.downcountAmount) : Imm8(js.downcountAmount));
+	SUB(32, PPCSTATE(downcount), Imm32(js.downcountAmount));
 	JMP(asm_routines.dispatcher, true);
 }
 
@@ -477,15 +495,17 @@ void JitIL::Trace()
 	}
 #endif
 
-	DEBUG_LOG(DYNA_REC, "JITIL PC: %08x SRR0: %08x SRR1: %08x CRfast: %02x%02x%02x%02x%02x%02x%02x%02x FPSCR: %08x MSR: %08x LR: %08x %s %s",
-		PC, SRR0, SRR1, PowerPC::ppcState.cr_fast[0], PowerPC::ppcState.cr_fast[1], PowerPC::ppcState.cr_fast[2], PowerPC::ppcState.cr_fast[3],
-		PowerPC::ppcState.cr_fast[4], PowerPC::ppcState.cr_fast[5], PowerPC::ppcState.cr_fast[6], PowerPC::ppcState.cr_fast[7], PowerPC::ppcState.fpscr,
-		PowerPC::ppcState.msr, PowerPC::ppcState.spr[8], regs.c_str(), fregs.c_str());
+	DEBUG_LOG(DYNA_REC, "JITIL PC: %08x SRR0: %08x SRR1: %08x CRval: %016lx%016lx%016lx%016lx%016lx%016lx%016lx%016lx FPSCR: %08x MSR: %08x LR: %08x %s %s",
+		PC, SRR0, SRR1, (unsigned long) PowerPC::ppcState.cr_val[0], (unsigned long) PowerPC::ppcState.cr_val[1], (unsigned long) PowerPC::ppcState.cr_val[2],
+		(unsigned long) PowerPC::ppcState.cr_val[3], (unsigned long) PowerPC::ppcState.cr_val[4], (unsigned long) PowerPC::ppcState.cr_val[5],
+		(unsigned long) PowerPC::ppcState.cr_val[6], (unsigned long) PowerPC::ppcState.cr_val[7], PowerPC::ppcState.fpscr, PowerPC::ppcState.msr,
+		PowerPC::ppcState.spr[8], regs.c_str(), fregs.c_str());
 }
 
 void STACKALIGN JitIL::Jit(u32 em_address)
 {
-	if (GetSpaceLeft() < 0x10000 || blocks.IsFull() || Core::g_CoreStartupParameter.bJITNoBlockCache)
+	if (GetSpaceLeft() < 0x10000 || farcode.GetSpaceLeft() < 0x10000 || blocks.IsFull() ||
+		SConfig::GetInstance().m_LocalCoreStartupParameter.bJITNoBlockCache)
 	{
 		ClearCache();
 	}
@@ -498,7 +518,7 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 {
 	int blockSize = code_buf->GetSize();
 
-	if (Core::g_CoreStartupParameter.bEnableDebugging)
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
 	{
 		// Comment out the following to disable breakpoints (speed-up)
 		if (!Profiler::g_ProfileBlocks)
@@ -529,7 +549,7 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 
 	// Downcount flag check. The last block decremented downcounter, and the flag should still be available.
 	FixupBranch skip = J_CC(CC_NBE);
-	MOV(32, M(&PC), Imm32(js.blockStart));
+	MOV(32, PPCSTATE(pc), Imm32(js.blockStart));
 	JMP(asm_routines.doTiming, true);  // downcount hit zero - go doTiming.
 	SetJumpTarget(skip);
 
@@ -542,13 +562,13 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 	if (js.fpa.any)
 	{
 		// This block uses FPU - needs to add FP exception bailout
-		TEST(32, M(&PowerPC::ppcState.msr), Imm32(1 << 13)); //Test FP enabled bit
+		TEST(32, PPCSTATE(msr), Imm32(1 << 13)); //Test FP enabled bit
 		FixupBranch b1 = J_CC(CC_NZ);
 
 		// If a FPU exception occurs, the exception handler will read
 		// from PC.  Update PC with the latest value in case that happens.
-		MOV(32, M(&PC), Imm32(js.blockStart));
-		OR(32, M((void *)&PowerPC::ppcState.Exceptions), Imm32(EXCEPTION_FPU_UNAVAILABLE));
+		MOV(32, PPCSTATE(pc), Imm32(js.blockStart));
+		OR(32, PPCSTATE(Exceptions), Imm32(EXCEPTION_FPU_UNAVAILABLE));
 		WriteExceptionExit();
 
 		SetJumpTarget(b1);
@@ -558,7 +578,7 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 
 	u64 codeHash = -1;
 	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILTimeProfiling ||
-		SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILOutputIR)
+	    SConfig::GetInstance().m_LocalCoreStartupParameter.bJITILOutputIR)
 	{
 		// For profiling and IR Writer
 		for (u32 i = 0; i < code_block.m_num_instructions; i++)
@@ -580,8 +600,8 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 	ibuild.Reset();
 
 	js.downcountAmount = 0;
-	if (!Core::g_CoreStartupParameter.bEnableDebugging)
-			js.downcountAmount += PatchEngine::GetSpeedhackCycles(code_block.m_address);
+	if (!SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
+		js.downcountAmount += PatchEngine::GetSpeedhackCycles(code_block.m_address);
 
 	// Translate instructions
 	for (u32 i = 0; i < code_block.m_num_instructions; i++)
@@ -616,7 +636,7 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 					HLEFunction(function);
 					if (type == HLE::HLE_HOOK_REPLACE)
 					{
-						MOV(32, R(EAX), M(&NPC));
+						MOV(32, R(EAX), PPCSTATE(npc));
 						jit->js.downcountAmount += jit->js.st.numCycles;
 						WriteExitDestInOpArg(R(EAX));
 						break;
@@ -637,7 +657,7 @@ const u8* JitIL::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBloc
 				ibuild.EmitExtExceptionCheck(ibuild.EmitIntConst(ops[i].address));
 			}
 
-			if (Core::g_CoreStartupParameter.bEnableDebugging && breakpoints.IsAddressBreakPoint(ops[i].address) && GetState() != CPU_STEPPING)
+			if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging && breakpoints.IsAddressBreakPoint(ops[i].address) && GetState() != CPU_STEPPING)
 			{
 				ibuild.EmitBreakPointCheck(ibuild.EmitIntConst(ops[i].address));
 			}

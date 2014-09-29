@@ -18,6 +18,7 @@
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <wx/listbox.h>
+#include <wx/msgdlg.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
 #include <wx/radiobut.h>
@@ -30,7 +31,7 @@
 #include <wx/translation.h>
 #include <wx/validate.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 #include "Core/ActionReplay.h"
@@ -275,9 +276,9 @@ void wxCheatsWindow::OnEvent_Close(wxCloseEvent& ev)
 void wxCheatsWindow::UpdateGUI()
 {
 	// load code
-	m_gameini_default = Core::g_CoreStartupParameter.LoadDefaultGameIni();
-	m_gameini_local = Core::g_CoreStartupParameter.LoadLocalGameIni();
-	m_gameini_local_path = Core::g_CoreStartupParameter.m_strGameIniLocal;
+	m_gameini_default = SConfig::GetInstance().m_LocalCoreStartupParameter.LoadDefaultGameIni();
+	m_gameini_local = SConfig::GetInstance().m_LocalCoreStartupParameter.LoadLocalGameIni();
+	m_gameini_local_path = SConfig::GetInstance().m_LocalCoreStartupParameter.m_strGameIniLocal;
 	Load_ARCodes();
 	Load_GeckoCodes();
 
@@ -288,7 +289,7 @@ void wxCheatsWindow::UpdateGUI()
 
 	// write the ISO name in the title
 	if (Core::IsRunning())
-		SetTitle(title + ": " + Core::g_CoreStartupParameter.GetUniqueID() + " - " + Core::g_CoreStartupParameter.m_strName);
+		SetTitle(title + ": " + SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID() + " - " + SConfig::GetInstance().m_LocalCoreStartupParameter.m_strName);
 	else
 		SetTitle(title);
 }
@@ -318,7 +319,7 @@ void wxCheatsWindow::Load_ARCodes()
 
 void wxCheatsWindow::Load_GeckoCodes()
 {
-	m_geckocode_panel->LoadCodes(m_gameini_default, m_gameini_local, Core::g_CoreStartupParameter.GetUniqueID(), true);
+	m_geckocode_panel->LoadCodes(m_gameini_default, m_gameini_local, SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID(), true);
 }
 
 void wxCheatsWindow::OnEvent_CheatsList_ItemSelected(wxCommandEvent& WXUNUSED (event))
@@ -398,7 +399,7 @@ void CheatSearchTab::StartNewSearch(wxCommandEvent& WXUNUSED (event))
 	const u8* const memptr = Memory::GetPointer(0);
 	if (nullptr == memptr)
 	{
-		PanicAlertT("A game is not currently running.");
+		WxUtils::ShowErrorDialog(_("A game is not currently running."));
 		return;
 	}
 
@@ -432,7 +433,7 @@ void CheatSearchTab::FilterCheatSearchResults(wxCommandEvent&)
 	const u8* const memptr = Memory::GetPointer(0);
 	if (nullptr == memptr)
 	{
-		PanicAlertT("A game is not currently running.");
+		WxUtils::ShowErrorDialog(_("A game is not currently running."));
 		return;
 	}
 
@@ -479,7 +480,7 @@ void CheatSearchTab::FilterCheatSearchResults(wxCommandEvent&)
 
 			if (!x_val.ToULong(&parsed_x_val, 0))
 			{
-				PanicAlertT("You must enter a valid decimal, hexadecimal or octal value.");
+				WxUtils::ShowErrorDialog(_("You must enter a valid decimal, hexadecimal or octal value."));
 				return;
 			}
 
@@ -629,7 +630,7 @@ void CreateCodeDialog::PressOK(wxCommandEvent& ev)
 	const wxString code_name = textctrl_name->GetValue();
 	if (code_name.empty())
 	{
-		PanicAlertT("You must enter a name!");
+		WxUtils::ShowErrorDialog(_("You must enter a name."));
 		return;
 	}
 
@@ -637,7 +638,7 @@ void CreateCodeDialog::PressOK(wxCommandEvent& ev)
 	int base = checkbox_use_hex->IsChecked() ? 16 : 10;
 	if (!textctrl_value->GetValue().ToLong(&code_value, base))
 	{
-		PanicAlertT("Invalid Value!");
+		WxUtils::ShowErrorDialog(_("Invalid value."));
 		return;
 	}
 

@@ -5,7 +5,7 @@
 #include <map>
 
 #include "Common/ArmEmitter.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -23,7 +23,6 @@
 #include "Core/PowerPC/JitArm32/JitArm_Tables.h"
 
 using namespace ArmGen;
-using namespace PowerPC;
 
 static int CODE_SIZE = 1024*1024*32;
 
@@ -108,12 +107,14 @@ static void ImHere()
 		}
 		fprintf(f.GetHandle(), "%08x\n", PC);
 	}
+
 	if (been_here.find(PC) != been_here.end())
 	{
 		been_here.find(PC)->second++;
 		if ((been_here.find(PC)->second) & 1023)
 			return;
 	}
+
 	DEBUG_LOG(DYNA_REC, "I'm here - PC = %08x , LR = %08x", PC, LR);
 	been_here[PC] = 1;
 }
@@ -233,31 +234,25 @@ void JitArm::SingleStep()
 
 void JitArm::Trace()
 {
-	char regs[500] = "";
-	char fregs[750] = "";
+	std::string regs;
+	std::string fregs;
 
 #ifdef JIT_LOG_GPR
 	for (int i = 0; i < 32; i++)
 	{
-		char reg[50];
-		sprintf(reg, "r%02d: %08x ", i, PowerPC::ppcState.gpr[i]);
-		strncat(regs, reg, sizeof(regs) - 1);
+		regs += StringFromFormat("r%02d: %08x ", i, PowerPC::ppcState.gpr[i]);
 	}
 #endif
 
 #ifdef JIT_LOG_FPR
 	for (int i = 0; i < 32; i++)
 	{
-		char reg[50];
-		sprintf(reg, "f%02d: %016x ", i, riPS0(i));
-		strncat(fregs, reg, sizeof(fregs) - 1);
+		fregs += StringFromFormat("f%02d: %016x ", i, riPS0(i));
 	}
 #endif
 
-	DEBUG_LOG(DYNA_REC, "JITARM PC: %08x SRR0: %08x SRR1: %08x CRfast: %02x%02x%02x%02x%02x%02x%02x%02x FPSCR: %08x MSR: %08x LR: %08x %s %s",
-		PC, SRR0, SRR1, PowerPC::ppcState.cr_fast[0], PowerPC::ppcState.cr_fast[1], PowerPC::ppcState.cr_fast[2], PowerPC::ppcState.cr_fast[3],
-		PowerPC::ppcState.cr_fast[4], PowerPC::ppcState.cr_fast[5], PowerPC::ppcState.cr_fast[6], PowerPC::ppcState.cr_fast[7], PowerPC::ppcState.fpscr,
-		PowerPC::ppcState.msr, PowerPC::ppcState.spr[8], regs, fregs);
+	DEBUG_LOG(DYNA_REC, "JIT64 PC: %08x SRR0: %08x SRR1: %08x FPSCR: %08x MSR: %08x LR: %08x %s %s",
+		PC, SRR0, SRR1, PowerPC::ppcState.fpscr, PowerPC::ppcState.msr, PowerPC::ppcState.spr[8], regs.c_str(), fregs.c_str());
 }
 
 void JitArm::PrintDebug(UGeckoInstruction inst, u32 level)
@@ -289,7 +284,7 @@ void JitArm::PrintDebug(UGeckoInstruction inst, u32 level)
 
 void STACKALIGN JitArm::Jit(u32 em_address)
 {
-	if (GetSpaceLeft() < 0x10000 || blocks.IsFull() || Core::g_CoreStartupParameter.bJITNoBlockCache)
+	if (GetSpaceLeft() < 0x10000 || blocks.IsFull() || SConfig::GetInstance().m_LocalCoreStartupParameter.bJITNoBlockCache)
 	{
 		ClearCache();
 	}
@@ -309,7 +304,7 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 {
 	int blockSize = code_buf->GetSize();
 
-	if (Core::g_CoreStartupParameter.bEnableDebugging)
+	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
 	{
 		// Comment out the following to disable breakpoints (speed-up)
 		blockSize = 1;
@@ -380,8 +375,10 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 		SetCC();
 		gpr.Unlock(A, C);
 	}
+
 	// Conditionally add profiling code.
-	if (Profiler::g_ProfileBlocks) {
+	if (Profiler::g_ProfileBlocks)
+	{
 		ARMReg rA = gpr.GetReg();
 		ARMReg rB = gpr.GetReg();
 		MOVI2R(rA, (u32)&b->runCount); // Load in to register
@@ -396,7 +393,7 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 	fpr.Start(js.fpa);
 	js.downcountAmount = 0;
 
-	if (!Core::g_CoreStartupParameter.bEnableDebugging)
+	if (!SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
 		js.downcountAmount += PatchEngine::GetSpeedhackCycles(em_address);
 
 	js.skipnext = false;
@@ -421,7 +418,8 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 			// WARNING - cmp->branch merging will screw this up.
 			js.isLastInstruction = true;
 			js.next_inst = 0;
-			if (Profiler::g_ProfileBlocks) {
+			if (Profiler::g_ProfileBlocks)
+			{
 				// CAUTION!!! push on stack regs you use, do your stuff, then pop
 				PROFILER_VPUSH;
 				// get end tic
@@ -437,6 +435,7 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 			js.next_inst = ops[i + 1].inst;
 			js.next_compilerPC = ops[i + 1].address;
 		}
+
 		if (jo.optimizeGatherPipe && js.fifoBytesThisBlock >= 32)
 		{
 			js.fifoBytesThisBlock -= 32;
@@ -444,7 +443,8 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 			QuickCallFunction(R14, (void*)&GPFifo::CheckGatherPipe);
 			POP(4, R0, R1, R2, R3);
 		}
-		if (Core::g_CoreStartupParameter.bEnableDebugging)
+
+		if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableDebugging)
 		{
 			// Add run count
 			static const u64 One = 1;
@@ -463,6 +463,7 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 			fpr.Unlock(VA);
 			fpr.Unlock(VB);
 		}
+
 		if (!ops[i].skip)
 		{
 				PrintDebug(ops[i].inst, DEBUG_OUTPUT);
@@ -480,6 +481,7 @@ const u8* JitArm::DoJit(u32 em_address, PPCAnalyst::CodeBuffer *code_buf, JitBlo
 				}
 		}
 	}
+
 	if (code_block.m_memory_exception)
 		BKPT(0x500);
 

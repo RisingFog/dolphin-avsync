@@ -1,14 +1,14 @@
 ########################################
 # General setup
 #
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.8)
 
 option(ANDROID "Enables a build for Android" OFF)
 option(USE_EGL "Enables EGL OpenGL Interface" OFF)
-option(USE_X11 "Enables X11 Support" ON)
-option(USE_WAYLAND "Enables Wayland Support" OFF)
+option(TRY_X11 "Enables X11 Support" ON)
 option(USE_UPNP "Enables UPnP port mapping support" ON)
-option(DISABLE_WX "Disable wxWidgets (use CLI interface)" OFF)
+option(DISABLE_WX "Disable wxWidgets (use Qt or CLI interface)" OFF)
+option(ENABLE_QT "Enable Qt (use the experimental Qt interface)" OFF)
 option(ENABLE_PCH "Use PCH to speed up compilation" ON)
 option(ENABLE_LTO "Enables Link Time Optimization" OFF)
 option(ENABLE_GENERIC "Enables generic build that should run on any little-endian host" OFF)
@@ -324,29 +324,12 @@ if(ANDROID)
 	message("Building for Android")
 	add_definitions(-DANDROID)
 	set(USE_X11 0)
-	set(USE_WAYLAND 0)
 	set(USE_UPNP 0)
-	set(USE_EGL True)
-	add_definitions(-DUSE_EGL=1)
+	set(USE_EGL 1)
 endif()
 
 include_directories(Externals/GL)
 
-# For now Wayland and EGL are tied to each other.
-# The alternative would be an shm path
-if(USE_WAYLAND)
-	add_definitions(-DUSE_EGL)
-	set(USE_EGL 1)
-endif()
-
-if(USE_EGL)
-	message("EGL OpenGL interface enabled")
-	add_definitions(-DUSE_EGL=1)
-else()
-	# Using GLX
-	set(USE_X11 1)
-	set(USE_WAYLAND 0)
-endif()
 add_definitions(-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE)
 
 ########################################
@@ -422,27 +405,12 @@ if(NOT ANDROID)
 		message("OpenAL NOT found, disabling OpenAL sound backend")
 	endif(OPENAL_FOUND)
 
-	if(UNIX AND NOT APPLE)
-		# Note: The convention is to check USE_X11 or USE_WAYLAND where needed.
-		# This is where we detect platforms and set the variables accordingly.
-		pkg_check_modules(WAYLAND wayland-egl wayland-client wayland-cursor)
-		if(USE_WAYLAND AND WAYLAND_FOUND)
-			pkg_check_modules(XKBCOMMON xkbcommon)
-			if(XKBCOMMON_FOUND)
-				set(USE_WAYLAND 1)
-				add_definitions(-DHAVE_WAYLAND)
-				include_directories(${WAYLAND_INCLUDE_DIR})
-				message("Wayland support enabled")
-			endif(XKBCOMMON_FOUND)
-		else()
-			set(USE_WAYLAND 0)
-			message("Wayland support disabled")
-			add_definitions(-DHAVE_WAYLAND=0)
-		endif(USE_WAYLAND AND WAYLAND_FOUND)
+	set(USE_X11 0)
 
+	if(UNIX AND NOT APPLE)
 		# Note: We do not need to explicitly check for X11 as it is done in the cmake
 		# FindOpenGL module on linux.
-		if(USE_X11 AND X11_FOUND)
+		if(TRY_X11 AND X11_FOUND)
 			set(USE_X11 1)
 			add_definitions(-DHAVE_X11=1)
 			include_directories(${X11_INCLUDE_DIR})
@@ -452,12 +420,12 @@ if(NOT ANDROID)
 			SET(X11_FOUND "")
 			message("X11 support disabled")
 			add_definitions(-DHAVE_X11=0)
-		endif(USE_X11 AND X11_FOUND)
+		endif(TRY_X11 AND X11_FOUND)
 
-		if (NOT USE_WAYLAND AND NOT USE_X11)
+		if (NOT USE_X11)
 			message(FATAL_ERROR "\n"
 				"No suitable display platform found\n"
-				"Requires wayland or x11 to run")
+				"Requires x11 to run")
 		endif()
 	endif()
 
@@ -506,6 +474,11 @@ if(NOT ANDROID)
 			message(FATAL_ERROR "oprofile or bfd not found. Can't build profiling support.")
 		endif()
 	endif()
+endif()
+
+if(USE_EGL)
+	message("EGL OpenGL interface enabled")
+	add_definitions(-DUSE_EGL=1)
 endif()
 
 ########################################
@@ -620,7 +593,7 @@ if(SFML_FOUND AND NOT SFML_VERSION_MAJOR) # SFML 1.x doesn't define SFML_VERSION
 else()
 	message("Using static SFML ${SFML_FIND_VERSION_MAJOR}.${SFML_FIND_VERSION_MINOR} from Externals")
 	add_subdirectory(Externals/SFML)
-	include_directories(Externals/SFML/include)
+	include_directories(BEFORE Externals/SFML/include)
 endif()
 
 if(USE_UPNP)
@@ -666,6 +639,11 @@ if (ANDROID)
 	message("Using static iconv from Externals")
 	include_directories(Externals/libiconv-1.14/include)
 	add_subdirectory(Externals/libiconv-1.14)
+endif()
+
+if(ENABLE_QT)
+	find_package(Qt5Widgets REQUIRED)
+	message("Found Qt version ${Qt5Core_VERSION}, enabling the Qt backend")
 endif()
 
 if(NOT DISABLE_WX AND NOT ANDROID)
@@ -790,9 +768,9 @@ if((NOT ${CMAKE_SYSTEM_NAME} MATCHES "Linux|FreeBSD|Darwin"))
 endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	# Install the application icon and menu item
-	install(FILES Source/Core/DolphinWX/resources/Dolphin.xpm
-		DESTINATION ${CMAKE_INSTALL_PREFIX}/share/pixmaps RENAME dolphin-emu.xpm)
-	install(FILES Source/Core/DolphinWX/resources/dolphin-emu.desktop
+	install(FILES Installer/dolphin-emu.xpm
+		DESTINATION ${CMAKE_INSTALL_PREFIX}/share/pixmaps)
+	install(FILES Installer/dolphin-emu.desktop
 		DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
 endif()
 

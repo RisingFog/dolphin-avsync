@@ -4,9 +4,6 @@
 
 #pragma once
 
-// DO NOT EVER INCLUDE <windows.h> directly _or indirectly_ from this file
-// since it slows down the build a lot.
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -61,11 +58,6 @@ extern const char *netplay_dolphin_ver;
 
 #define STACKALIGN
 
-#if __cplusplus >= 201103 || defined(_MSC_VER) || defined(__GXX_EXPERIMENTAL_CXX0X__)
-#define HAVE_CXX11_SYNTAX 1
-#endif
-
-#if HAVE_CXX11_SYNTAX
 // An inheritable class to disallow the copy constructor and operator= functions
 class NonCopyable
 {
@@ -77,7 +69,6 @@ private:
 	NonCopyable(NonCopyable&);
 	NonCopyable& operator=(NonCopyable& other);
 };
-#endif
 
 #ifdef __APPLE__
 // The Darwin ABI requires that stack frames be aligned to 16-byte boundaries.
@@ -88,13 +79,6 @@ private:
 #endif
 
 #elif defined _WIN32
-
-// Check MSC ver
-	#if !defined _MSC_VER || _MSC_VER <= 1000
-		#error needs at least version 1000 of MSC
-	#endif
-
-	#define NOMINMAX
 
 // Memory leak checks
 	#define CHECK_HEAP_INTEGRITY()

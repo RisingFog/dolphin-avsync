@@ -15,17 +15,17 @@ class GCMemcardDirectory : public MemoryCardBase, NonCopyable
 public:
 	GCMemcardDirectory(std::string directory, int slot = 0, u16 sizeMb = MemCard2043Mb, bool ascii = true,
 		DiscIO::IVolume::ECountry  card_region = DiscIO::IVolume::COUNTRY_EUROPE, int gameId = 0);
-	~GCMemcardDirectory() { Flush(true); }
-	void Flush(bool exiting = false) override;
+	~GCMemcardDirectory();
+	void FlushToFile();
 
 	s32 Read(u32 address, s32 length, u8 *destaddress) override;
 	s32 Write(u32 destaddress, s32 length, u8 *srcaddress) override;
 	void ClearBlock(u32 address) override;
-	void ClearAll() override { ; }
+	void ClearAll() override {}
 	void DoState(PointerWrap &p) override;
 
 private:
-	int LoadGCI(std::string fileName, DiscIO::IVolume::ECountry card_region);
+	int LoadGCI(std::string fileName, DiscIO::IVolume::ECountry card_region, bool currentGameOnly);
 	inline s32 SaveAreaRW(u32 block, bool writing = false);
 	// s32 DirectoryRead(u32 offset, u32 length, u8* destaddress);
 	s32 DirectoryWrite(u32 destaddress, u32 length, u8 *srcaddress);

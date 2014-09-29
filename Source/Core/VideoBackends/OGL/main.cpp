@@ -49,6 +49,7 @@ Make AA apply instantly during gameplay if possible
 #include "Core/Host.h"
 
 #include "VideoBackends/OGL/FramebufferManager.h"
+#include "VideoBackends/OGL/GLInterfaceBase.h"
 #include "VideoBackends/OGL/GLUtil.h"
 #include "VideoBackends/OGL/PerfQuery.h"
 #include "VideoBackends/OGL/PostProcessing.h"
@@ -76,16 +77,6 @@ Make AA apply instantly during gameplay if possible
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/VideoState.h"
-
-
-#ifdef _WIN32
-#include "Common/IniFile.h"
-#endif
-
-#if defined(HAVE_WX) && HAVE_WX
-#include "DolphinWX/VideoConfigDiag.h"
-#include "DolphinWX/Debugger/DebuggerPanel.h"
-#endif // HAVE_WX
 
 namespace OGL
 {
@@ -141,9 +132,8 @@ static void GetShaders(std::vector<std::string> &shaders)
 static void InitBackendInfo()
 {
 	g_Config.backend_info.APIType = API_OPENGL;
-	g_Config.backend_info.bUseRGBATextures = true;
 	g_Config.backend_info.bUseMinimalMipCount = false;
-	g_Config.backend_info.bSupports3DVision = false;
+	g_Config.backend_info.bSupportsExclusiveFullscreen = false;
 	//g_Config.backend_info.bSupportsDualSourceBlend = true; // is gpu dependent and must be set in renderer
 	//g_Config.backend_info.bSupportsEarlyZ = true; // is gpu dependent and must be set in renderer
 	g_Config.backend_info.bSupportsOversizedViewports = true;
@@ -160,14 +150,11 @@ static void InitBackendInfo()
 
 void VideoBackend::ShowConfig(void *_hParent)
 {
-#if defined(HAVE_WX) && HAVE_WX
 	InitBackendInfo();
-	VideoConfigDiag diag((wxWindow*)_hParent, "OpenGL", "gfx_opengl");
-	diag.ShowModal();
-#endif
+	Host_ShowVideoConfig(_hParent, GetDisplayName(), "gfx_opengl");
 }
 
-bool VideoBackend::Initialize(void *&window_handle)
+bool VideoBackend::Initialize(void *window_handle)
 {
 	InitializeShared();
 	InitBackendInfo();
@@ -201,10 +188,6 @@ void VideoBackend::Video_Prepare()
 
 	g_renderer = new Renderer;
 
-	s_efbAccessRequested = false;
-	s_FifoShuttingDown = false;
-	s_swapRequested = false;
-
 	CommandProcessor::Init();
 	PixelEngine::Init();
 
@@ -217,7 +200,6 @@ void VideoBackend::Video_Prepare()
 	VertexShaderManager::Init();
 	PixelShaderManager::Init();
 	ProgramShaderCache::Init();
-	PostProcessing::Init();
 	g_texture_cache = new TextureCache();
 	g_sampler_cache = new SamplerCache();
 	Renderer::Init();
@@ -239,13 +221,10 @@ void VideoBackend::Shutdown()
 	GLInterface->Shutdown();
 }
 
-void VideoBackend::Video_Cleanup() {
-
+void VideoBackend::Video_Cleanup()
+{
 	if (g_renderer)
 	{
-		s_efbAccessRequested = false;
-		s_FifoShuttingDown = false;
-		s_swapRequested = false;
 		Fifo_Shutdown();
 
 		// The following calls are NOT Thread Safe
@@ -257,7 +236,6 @@ void VideoBackend::Video_Cleanup() {
 		g_sampler_cache = nullptr;
 		delete g_texture_cache;
 		g_texture_cache = nullptr;
-		PostProcessing::Shutdown();
 		ProgramShaderCache::Shutdown();
 		VertexShaderManager::Shutdown();
 		PixelShaderManager::Shutdown();

@@ -9,7 +9,9 @@
 #include <polarssl/aes.h>
 #include <polarssl/sha1.h>
 
-#include "Common/Common.h"
+#include "Common/CommonFuncs.h"
+#include "Common/CommonTypes.h"
+#include "Common/Logging/Log.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Volume.h"
 #include "DiscIO/VolumeGC.h"
@@ -21,25 +23,21 @@ namespace DiscIO
 CVolumeWiiCrypted::CVolumeWiiCrypted(IBlobReader* _pReader, u64 _VolumeOffset,
 									 const unsigned char* _pVolumeKey)
 	: m_pReader(_pReader),
+	m_AES_ctx(new aes_context),
 	m_pBuffer(nullptr),
 	m_VolumeOffset(_VolumeOffset),
-	dataOffset(0x20000),
+	m_dataOffset(0x20000),
 	m_LastDecryptedBlockOffset(-1)
 {
-	m_AES_ctx = new aes_context;
-	aes_setkey_dec(m_AES_ctx, _pVolumeKey, 128);
+	aes_setkey_dec(m_AES_ctx.get(), _pVolumeKey, 128);
 	m_pBuffer = new u8[0x8000];
 }
 
 
 CVolumeWiiCrypted::~CVolumeWiiCrypted()
 {
-	delete m_pReader; // is this really our responsibility?
-	m_pReader = nullptr;
 	delete[] m_pBuffer;
 	m_pBuffer = nullptr;
-	delete m_AES_ctx;
-	m_AES_ctx = nullptr;
 }
 
 bool CVolumeWiiCrypted::RAWRead( u64 _Offset, u64 _Length, u8* _pBuffer ) const
@@ -70,7 +68,7 @@ bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer) const
 		u64 Offset = _ReadOffset % 0x7C00;
 
 		// read current block
-		if (!m_pReader->Read(m_VolumeOffset + dataOffset + Block * 0x8000, 0x8000, m_pBuffer))
+		if (!m_pReader->Read(m_VolumeOffset + m_dataOffset + Block * 0x8000, 0x8000, m_pBuffer))
 		{
 			return(false);
 		}
@@ -78,7 +76,7 @@ bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer) const
 		if (m_LastDecryptedBlockOffset != Block)
 		{
 			memcpy(IV, m_pBuffer + 0x3d0, 16);
-			aes_crypt_cbc(m_AES_ctx, AES_DECRYPT, 0x7C00, IV, m_pBuffer + 0x400, m_LastDecryptedBlock);
+			aes_crypt_cbc(m_AES_ctx.get(), AES_DECRYPT, 0x7C00, IV, m_pBuffer + 0x400, m_LastDecryptedBlock);
 
 			m_LastDecryptedBlockOffset = Block;
 		}
@@ -250,7 +248,7 @@ bool CVolumeWiiCrypted::CheckIntegrity() const
 	u32 nClusters = (u32)(partDataSize / 0x8000);
 	for (u32 clusterID = 0; clusterID < nClusters; ++clusterID)
 	{
-		u64 clusterOff = m_VolumeOffset + dataOffset + (u64)clusterID * 0x8000;
+		u64 clusterOff = m_VolumeOffset + m_dataOffset + (u64)clusterID * 0x8000;
 
 		// Read and decrypt the cluster metadata
 		u8 clusterMDCrypted[0x400];
@@ -261,7 +259,7 @@ bool CVolumeWiiCrypted::CheckIntegrity() const
 			NOTICE_LOG(DISCIO, "Integrity Check: fail at cluster %d: could not read metadata", clusterID);
 			return false;
 		}
-		aes_crypt_cbc(m_AES_ctx, AES_DECRYPT, 0x400, IV, clusterMDCrypted, clusterMD);
+		aes_crypt_cbc(m_AES_ctx.get(), AES_DECRYPT, 0x400, IV, clusterMDCrypted, clusterMD);
 
 
 		// Some clusters have invalid data and metadata because they aren't

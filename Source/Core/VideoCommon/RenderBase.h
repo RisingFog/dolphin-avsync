@@ -24,6 +24,8 @@
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VideoCommon.h"
 
+class PostProcessingShaderImplementation;
+
 // TODO: Move these out of here.
 extern int frameCount;
 extern int OSDChoice;
@@ -107,13 +109,15 @@ public:
 	virtual void RestoreAPIState() = 0;
 
 	// Finish up the current frame, print some stats
-	static void Swap(u32 xfbAddr, u32 fbWidth, u32 fbHeight, const EFBRectangle& rc,float Gamma = 1.0f);
-	virtual void SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbHeight, const EFBRectangle& rc,float Gamma = 1.0f) = 0;
+	static void Swap(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc,float Gamma = 1.0f);
+	virtual void SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc, float Gamma = 1.0f) = 0;
 
 	virtual bool SaveScreenshot(const std::string &filename, const TargetRectangle &rc) = 0;
 
 	static PEControl::PixelFormat GetPrevPixelFormat() { return prev_efb_format; }
 	static void StorePixelFormat(PEControl::PixelFormat new_format) { prev_efb_format = new_format; }
+
+	PostProcessingShaderImplementation* GetPostProcessor() { return m_post_processor; }
 
 protected:
 
@@ -148,10 +152,11 @@ protected:
 	// can probably eliminate this static var
 	static int s_LastEFBScale;
 
-	static bool s_skipSwap;
 	static bool XFBWrited;
 
 	FPSCounter m_fps_counter;
+
+	static PostProcessingShaderImplementation* m_post_processor;
 
 private:
 	static PEControl::PixelFormat prev_efb_format;

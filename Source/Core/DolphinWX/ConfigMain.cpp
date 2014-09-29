@@ -25,8 +25,8 @@
 
 #include "AudioCommon/AudioCommon.h"
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileSearch.h"
 #include "Common/SysConf.h"
 
@@ -146,7 +146,6 @@ EVT_RADIOBOX(ID_DSPENGINE, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DSPTHREAD, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_ENABLE_THROTTLE, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DUMP_AUDIO, CConfigMain::AudioSettingsChanged)
-EVT_CHECKBOX(ID_DUMP_AUDIO_TO_AVI, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DPL2DECODER, CConfigMain::AudioSettingsChanged)
 EVT_CHOICE(ID_BACKEND, CConfigMain::AudioSettingsChanged)
 EVT_SLIDER(ID_VOLUME, CConfigMain::AudioSettingsChanged)
@@ -265,8 +264,7 @@ void CConfigMain::InitializeGUILists()
 	// Framelimit
 	arrayStringFor_Framelimit.Add(_("Off"));
 	arrayStringFor_Framelimit.Add(_("Auto"));
-	arrayStringFor_Framelimit.Add(_("Audio"));
-	for (int i = 10; i <= 120; i += 5) // from 10 to 120
+	for (int i = 5; i <= 120; i += 5) // from 5 to 120
 		arrayStringFor_Framelimit.Add(wxString::Format("%i", i));
 
 	// Emulator Engine
@@ -377,7 +375,6 @@ void CConfigMain::InitializeGUIValues()
 	VolumeText->SetLabel(wxString::Format("%d %%", SConfig::GetInstance().m_Volume));
 	DSPThread->SetValue(startup_params.bDSPThread);
 	DumpAudio->SetValue(SConfig::GetInstance().m_DumpAudio ? true : false);
-	DumpAudioToAVI->SetValue(SConfig::GetInstance().m_DumpAudioToAVI ? true : false);
 	DPL2Decoder->Enable(std::string(SConfig::GetInstance().sBackend) == BACKEND_OPENAL);
 	DPL2Decoder->SetValue(startup_params.bDPL2Decoder);
 	Latency->Enable(std::string(SConfig::GetInstance().sBackend) == BACKEND_OPENAL);
@@ -515,7 +512,7 @@ void CConfigMain::InitializeGUITooltips()
 {
 	// General - Basic
 	CPUThread->SetToolTip(_("This splits the Video and CPU threads, so they can be run on separate cores.\nCauses major speed improvements on PCs with more than one core, but can also cause occasional crashes/glitches."));
-	Framelimit->SetToolTip(_("This limits the game speed to the specified number of frames per second (full speed is 60 for NTSC and 50 for PAL). Alternatively, use Audio to throttle using the DSP (might fix audio clicks but can also cause constant noise depending on the game)."));
+	Framelimit->SetToolTip(_("This limits the game speed to the specified number of frames per second (full speed is 60 for NTSC and 50 for PAL)."));
 
 	// General - Advanced
 	_NTSCJ->SetToolTip(_("Forces NTSC-J mode for using the Japanese ROM font.\nLeft unchecked, dolphin defaults to NTSC-U and automatically enables this setting when playing Japanese games."));
@@ -662,7 +659,6 @@ void CConfigMain::CreateGUIControls()
 	DSPThread = new wxCheckBox(AudioPage, ID_DSPTHREAD, _("DSPLLE on Separate Thread"));
 	DumpAudio = new wxCheckBox(AudioPage, ID_DUMP_AUDIO, _("Dump Audio"));
 	DPL2Decoder = new wxCheckBox(AudioPage, ID_DPL2DECODER, _("Dolby Pro Logic II decoder"));
-	DumpAudioToAVI = new wxCheckBox(AudioPage, ID_DUMP_AUDIO_TO_AVI, _("Dump Audio To AVI"));
 	VolumeSlider = new wxSlider(AudioPage, ID_VOLUME, 0, 1, 100, wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL|wxSL_INVERSE);
 	VolumeText = new wxStaticText(AudioPage, wxID_ANY, "");
 	BackendSelection = new wxChoice(AudioPage, ID_BACKEND, wxDefaultPosition, wxDefaultSize, wxArrayBackends, 0, wxDefaultValidator, wxEmptyString);
@@ -683,7 +679,6 @@ void CConfigMain::CreateGUIControls()
 	sbAudioSettings->Add(DSPThread, 0, wxALL, 5);
 	sbAudioSettings->Add(DumpAudio, 0, wxALL, 5);
 	sbAudioSettings->Add(DPL2Decoder, 0, wxALL, 5);
-	sbAudioSettings->Add(DumpAudioToAVI, 0, wxALL, 5);
 
 	wxStaticBoxSizer *sbVolume = new wxStaticBoxSizer(wxVERTICAL, AudioPage, _("Volume"));
 	sbVolume->Add(VolumeSlider, 1, wxLEFT|wxRIGHT, 13);
@@ -762,7 +757,7 @@ void CConfigMain::CreateGUIControls()
 	{
 		sbGamecubeDevSettings->Add(GCSIDeviceText[i], 1, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT|wxBOTTOM, 0);
 		sbGamecubeDevSettings->Add(GCSIDevice[i], 1, wxEXPAND|wxLEFT|wxRIGHT|wxBOTTOM, 0);
-		if (NetPlay::IsNetPlayRunning() || Movie::IsRecordingInput() || Movie::IsPlayingInput())
+		if (NetPlay::IsNetPlayRunning() || Movie::IsMovieActive())
 		{
 			GCSIDevice[i]->Disable();
 		}
@@ -902,7 +897,6 @@ void CConfigMain::CoreSettingsChanged(wxCommandEvent& event)
 		break;
 	case ID_FRAMELIMIT:
 		SConfig::GetInstance().m_Framelimit = Framelimit->GetSelection();
-		AudioCommon::UpdateSoundStream();
 		break;
 	// Core - Advanced
 	case ID_CPUENGINE:
@@ -990,7 +984,6 @@ void CConfigMain::AudioSettingsChanged(wxCommandEvent& event)
 
 	default:
 		SConfig::GetInstance().m_DumpAudio = DumpAudio->GetValue();
-		SConfig::GetInstance().m_DumpAudioToAVI = DumpAudioToAVI->GetValue();
 		break;
 	}
 }
@@ -1011,8 +1004,7 @@ bool CConfigMain::SupportsVolumeChanges(std::string backend)
 	//FIXME: this one should ask the backend whether it supports it.
 	//       but getting the backend from string etc. is probably
 	//       too much just to enable/disable a stupid slider...
-	return (backend == BACKEND_DIRECTSOUND ||
-			backend == BACKEND_COREAUDIO ||
+	return (backend == BACKEND_COREAUDIO ||
 			backend == BACKEND_OPENAL ||
 			backend == BACKEND_XAUDIO2);
 }
@@ -1077,8 +1069,8 @@ void CConfigMain::ChooseMemcardPath(std::string& strMemcard, bool isSlotA)
 			GCMemcard memorycard(filename);
 			if (!memorycard.IsValid())
 			{
-				PanicAlertT("Cannot use that file as a memory card.\n%s\n" \
-							"is not a valid gamecube memory card file", filename.c_str());
+				WxUtils::ShowErrorDialog(wxString::Format(_("Cannot use that file as a memory card.\n%s\n" \
+				            "is not a valid gamecube memory card file"), filename.c_str()));
 				return;
 			}
 		}
@@ -1113,8 +1105,8 @@ void CConfigMain::ChooseMemcardPath(std::string& strMemcard, bool isSlotA)
 		}
 		else
 		{
-			PanicAlertT("Cannot use that file as a memory card.\n" \
-					"Are you trying to use the same file in both slots?");
+			WxUtils::ShowErrorDialog(_("Cannot use that file as a memory card.\n"
+			                           "Are you trying to use the same file in both slots?"));
 		}
 	}
 }
@@ -1211,7 +1203,7 @@ void CConfigMain::WiiSettingsChanged(wxCommandEvent& event)
 		u8 country_code = GetSADRCountryCode(wii_system_lang);
 		if (!SConfig::GetInstance().m_SYSCONF->SetArrayData("IPL.SADR", &country_code, 1))
 		{
-			PanicAlertT("Failed to update country code in SYSCONF");
+			WxUtils::ShowErrorDialog(_("Failed to update country code in SYSCONF"));
 		}
 		break;
 	}
@@ -1245,7 +1237,7 @@ void CConfigMain::AddRemoveISOPaths(wxCommandEvent& event)
 		{
 			if (ISOPaths->FindString(dialog.GetPath()) != -1)
 			{
-				wxMessageBox(_("The chosen directory is already in the list"), _("Error"), wxOK);
+				WxUtils::ShowErrorDialog(_("The chosen directory is already in the list."));
 			}
 			else
 			{

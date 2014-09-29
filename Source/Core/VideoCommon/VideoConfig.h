@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "VideoCommon/VideoCommon.h"
 
 // Log in two categories, and save three other options in the same byte
@@ -57,7 +57,7 @@ struct VideoConfig final
 
 	// General
 	bool bVSync;
-
+	bool bFullscreen;
 	bool bRunning;
 	bool bWidescreenHack;
 	int iAspectRatio;
@@ -100,7 +100,7 @@ struct VideoConfig final
 	bool bAnaglyphStereo;
 	int iAnaglyphStereoSeparation;
 	int iAnaglyphFocalAngle;
-	bool b3DVision;
+	bool bBorderlessFullscreen;
 
 	// Hacks
 	bool bEFBAccessEnable;
@@ -137,9 +137,8 @@ struct VideoConfig final
 		std::vector<std::string> AAModes;
 		std::vector<std::string> PPShaders; // post-processing shaders
 
-		bool bUseRGBATextures; // used for D3D in TextureCache
 		bool bUseMinimalMipCount;
-		bool bSupports3DVision;
+		bool bSupportsExclusiveFullscreen;
 		bool bSupportsDualSourceBlend;
 		bool bSupportsPrimitiveRestart;
 		bool bSupportsOversizedViewports;
@@ -152,6 +151,7 @@ struct VideoConfig final
 	bool VirtualXFBEnabled() const { return bUseXFB && !bUseRealXFB; }
 	bool EFBCopiesToTextureEnabled() const { return bEFBCopyEnable && bCopyEFBToTexture; }
 	bool EFBCopiesToRamEnabled() const { return bEFBCopyEnable && !bCopyEFBToTexture; }
+	bool BorderlessFullscreenEnabled() const { return !backend_info.bSupportsExclusiveFullscreen || bBorderlessFullscreen; }
 };
 
 extern VideoConfig g_Config;

@@ -18,6 +18,7 @@
 #include <wx/frame.h>
 #include <wx/gdicmn.h>
 #include <wx/listbox.h>
+#include <wx/msgdlg.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
@@ -27,7 +28,7 @@
 #include <wx/textctrl.h>
 #include <wx/translation.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/FifoQueue.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
@@ -49,7 +50,7 @@
 class wxWindow;
 
 #define NETPLAY_TITLEBAR  "Dolphin NetPlay"
-#define INITIAL_PAD_BUFFER_SIZE 20
+#define INITIAL_PAD_BUFFER_SIZE 5
 
 BEGIN_EVENT_TABLE(NetPlayDiag, wxFrame)
 	EVT_COMMAND(wxID_ANY, wxEVT_THREAD, NetPlayDiag::OnThread)
@@ -134,7 +135,6 @@ NetPlaySetupDiag::NetPlaySetupDiag(wxWindow* const parent, const CGameListCtrl* 
 		" - Enable Dual Core [OFF]\n"
 		" - DSP Emulator Engine Must be the same on all computers!\n"
 		" - DSP on Dedicated Thread [OFF]\n"
-		" - Framelimit NOT set to [Audio]\n"
 		" - Manually set the extensions for each wiimote\n"
 		"\n"
 		"All players should use the same Dolphin version and settings.\n"
@@ -257,13 +257,13 @@ void NetPlaySetupDiag::OnHost(wxCommandEvent&)
 	NetPlayDiag *&npd = NetPlayDiag::GetInstance();
 	if (npd)
 	{
-		PanicAlertT("A NetPlay window is already open!!");
+		WxUtils::ShowErrorDialog(_("A NetPlay window is already open!"));
 		return;
 	}
 
 	if (-1 == m_game_lbox->GetSelection())
 	{
-		PanicAlertT("You must choose a game!!");
+		WxUtils::ShowErrorDialog(_("You must choose a game!"));
 		return;
 	}
 
@@ -284,7 +284,7 @@ void NetPlaySetupDiag::OnHost(wxCommandEvent&)
 	}
 	else
 	{
-		PanicAlertT("Failed to listen.  Is another instance of the NetPlay server running?");
+		WxUtils::ShowErrorDialog(_("Failed to listen. Is another instance of the NetPlay server running?"));
 	}
 }
 
@@ -293,7 +293,7 @@ void NetPlaySetupDiag::OnJoin(wxCommandEvent&)
 	NetPlayDiag *&npd = NetPlayDiag::GetInstance();
 	if (npd)
 	{
-		PanicAlertT("A NetPlay window is already open!!");
+		WxUtils::ShowErrorDialog(_("A NetPlay window is already open!"));
 		return;
 	}
 
@@ -382,7 +382,7 @@ NetPlayDiag::NetPlayDiag(wxWindow* const parent, const CGameListCtrl* const game
 		bottom_szr->Add(m_start_btn);
 
 		bottom_szr->Add(new wxStaticText(panel, wxID_ANY, _("Buffer:")), 0, wxLEFT | wxCENTER, 5 );
-		wxSpinCtrl* const padbuf_spin = new wxSpinCtrl(panel, wxID_ANY, "20"
+		wxSpinCtrl* const padbuf_spin = new wxSpinCtrl(panel, wxID_ANY, std::to_string(INITIAL_PAD_BUFFER_SIZE)
 			, wxDefaultPosition, wxSize(64, -1), wxSP_ARROW_KEYS, 0, 200, INITIAL_PAD_BUFFER_SIZE);
 		padbuf_spin->Bind(wxEVT_SPINCTRL, &NetPlayDiag::OnAdjustBuffer, this);
 		bottom_szr->Add(padbuf_spin, 0, wxCENTER);
@@ -460,7 +460,7 @@ std::string NetPlayDiag::FindGame()
 		if (m_selected_game == BuildGameName(*game))
 			return game->GetFileName();
 
-	PanicAlertT("Game not found!");
+	WxUtils::ShowErrorDialog(_("Game not found!"));
 	return "";
 }
 
@@ -469,7 +469,7 @@ void NetPlayDiag::OnStart(wxCommandEvent&)
 	NetSettings settings;
 	GetNetSettings(settings);
 	netplay_server->SetNetSettings(settings);
-	netplay_server->StartGame(FindGame());
+	netplay_server->StartGame();
 }
 
 void NetPlayDiag::BootGame(const std::string& filename)

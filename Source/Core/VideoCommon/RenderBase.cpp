@@ -59,11 +59,12 @@ int Renderer::s_target_height;
 int Renderer::s_backbuffer_width;
 int Renderer::s_backbuffer_height;
 
+PostProcessingShaderImplementation* Renderer::m_post_processor;
+
 TargetRectangle Renderer::target_rc;
 
 int Renderer::s_LastEFBScale;
 
-bool Renderer::s_skipSwap;
 bool Renderer::XFBWrited;
 
 PEControl::PixelFormat Renderer::prev_efb_format = PEControl::INVALID_FMT;
@@ -111,8 +112,6 @@ void Renderer::RenderToXFB(u32 xfbAddr, const EFBRectangle& sourceRc, u32 fbWidt
 	if (!fbWidth || !fbHeight)
 		return;
 
-	s_skipSwap = g_bSkipCurrentFrame;
-
 	VideoFifo_CheckEFBAccess();
 	VideoFifo_CheckSwapRequestAt(xfbAddr, fbWidth, fbHeight);
 	XFBWrited = true;
@@ -123,8 +122,8 @@ void Renderer::RenderToXFB(u32 xfbAddr, const EFBRectangle& sourceRc, u32 fbWidt
 	}
 	else
 	{
-		Swap(xfbAddr, fbWidth, fbHeight,sourceRc,Gamma);
-		Common::AtomicStoreRelease(s_swapRequested, false);
+		Swap(xfbAddr, fbWidth, fbWidth, fbHeight, sourceRc, Gamma);
+		s_swapRequested.Clear();
 	}
 }
 
@@ -515,10 +514,10 @@ void Renderer::RecordVideoMemory()
 	FifoRecorder::GetInstance().SetVideoMemory(bpmem_ptr, cpmem, xfmem_ptr, xfregs_ptr, xfregs_size);
 }
 
-void Renderer::Swap(u32 xfbAddr, u32 fbWidth, u32 fbHeight, const EFBRectangle& rc, float Gamma)
+void Renderer::Swap(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight, const EFBRectangle& rc, float Gamma)
 {
 	// TODO: merge more generic parts into VideoCommon
-	g_renderer->SwapImpl(xfbAddr, fbWidth, fbHeight, rc, Gamma);
+	g_renderer->SwapImpl(xfbAddr, fbWidth, fbStride, fbHeight, rc, Gamma);
 
 	if (XFBWrited)
 		g_renderer->m_fps_counter.Update();

@@ -86,7 +86,7 @@ bool AVIDump::CreateFile()
 {
 	m_totalBytes = 0;
 	m_frameCount = 0;
-	m_samplesSound = 0;
+
 	std::string movie_file_name = StringFromFormat("%sframedump%d.avi", File::GetUserPath(D_DUMPFRAMES_IDX).c_str(), m_fileCount);
 
 	// Create path

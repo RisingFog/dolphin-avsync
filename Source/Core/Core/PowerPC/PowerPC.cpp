@@ -4,7 +4,7 @@
 
 #include "Common/Atomic.h"
 #include "Common/ChunkFile.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/FPURoundMode.h"
 #include "Common/MathUtil.h"
 
@@ -30,7 +30,7 @@ namespace PowerPC
 
 // STATE_TO_SAVE
 PowerPCState GC_ALIGNED16(ppcState);
-static volatile CPUState state = CPU_STEPPING;
+static volatile CPUState state = CPU_POWERDOWN;
 
 Interpreter * const interpreter = Interpreter::getInstance();
 static CoreMode mode;
@@ -41,10 +41,10 @@ PPCDebugInterface debug_interface;
 
 u32 CompactCR()
 {
-	u32 new_cr = ppcState.cr_fast[0] << 28;
-	for (int i = 1; i < 8; i++)
+	u32 new_cr = 0;
+	for (int i = 0; i < 8; i++)
 	{
-		new_cr |= ppcState.cr_fast[i] << (28 - i * 4);
+		new_cr |= GetCRField(i) << (28 - i * 4);
 	}
 	return new_cr;
 }
@@ -53,7 +53,7 @@ void ExpandCR(u32 cr)
 {
 	for (int i = 0; i < 8; i++)
 	{
-		ppcState.cr_fast[i] = (cr >> (28 - i * 4)) & 0xF;
+		SetCRField(i, (cr >> (28 - i * 4)) & 0xF);
 	}
 }
 
@@ -99,7 +99,8 @@ static void ResetRegisters()
 	ppcState.pc = 0;
 	ppcState.npc = 0;
 	ppcState.Exceptions = 0;
-	((u64*)(&ppcState.cr_fast[0]))[0] = 0;
+	for (auto& v : ppcState.cr_val)
+		v = 0x8000000000000001;
 
 	TL = 0;
 	TU = 0;
@@ -116,7 +117,6 @@ void Init(int cpu_core)
 	FPURoundMode::SetPrecisionMode(FPURoundMode::PREC_53);
 
 	memset(ppcState.sr, 0, sizeof(ppcState.sr));
-	ppcState.DebugCount = 0;
 	ppcState.dtlb_last = 0;
 	memset(ppcState.dtlb_va, 0, sizeof(ppcState.dtlb_va));
 	memset(ppcState.dtlb_pa, 0, sizeof(ppcState.dtlb_pa));

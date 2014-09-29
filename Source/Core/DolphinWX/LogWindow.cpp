@@ -28,7 +28,7 @@
 #include <wx/windowid.h>
 #include <wx/aui/framemanager.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/Logging/ConsoleListener.h"
@@ -103,7 +103,7 @@ void CLogWindow::CreateGUIControls()
 	for (int i = 0; i < LogTypes::NUMBER_OF_LOGS; ++i)
 	{
 		bool enable;
-		logs->Get(m_LogManager->GetShortName((LogTypes::LOG_TYPE)i), &enable, true);
+		logs->Get(m_LogManager->GetShortName((LogTypes::LOG_TYPE)i), &enable, false);
 
 		if (m_writeWindow && enable)
 			m_LogManager->AddListener((LogTypes::LOG_TYPE)i, this);
@@ -314,23 +314,23 @@ void CLogWindow::UpdateLog()
 	{
 		switch (msgQueue.front().first)
 		{
-			case ERROR_LEVEL:
+			case LogTypes::LOG_LEVELS::LERROR:
 				m_Log->SetDefaultStyle(wxTextAttr(*wxRED));
 				break;
 
-			case WARNING_LEVEL:
+			case LogTypes::LOG_LEVELS::LWARNING:
 				m_Log->SetDefaultStyle(wxTextAttr(*wxYELLOW));
 				break;
 
-			case NOTICE_LEVEL:
+			case LogTypes::LOG_LEVELS::LNOTICE:
 				m_Log->SetDefaultStyle(wxTextAttr(*wxGREEN));
 				break;
 
-			case INFO_LEVEL:
+			case LogTypes::LOG_LEVELS::LINFO:
 				m_Log->SetDefaultStyle(wxTextAttr(*wxCYAN));
 				break;
 
-			case DEBUG_LEVEL:
+			case LogTypes::LOG_LEVELS::LDEBUG:
 				m_Log->SetDefaultStyle(wxTextAttr(*wxLIGHT_GREY));
 				break;
 

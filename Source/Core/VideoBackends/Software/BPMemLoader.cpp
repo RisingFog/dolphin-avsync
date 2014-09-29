@@ -2,6 +2,7 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
+#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 
@@ -93,7 +94,7 @@ void SWBPWritten(int address, int newvalue)
 			u8 *ptr = nullptr;
 
 			// TODO - figure out a cleaner way.
-			if (Core::g_CoreStartupParameter.bWii)
+			if (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii)
 				ptr = Memory::GetPointer(bpmem.tmem_config.tlut_src << 5);
 			else
 				ptr = Memory::GetPointer((bpmem.tmem_config.tlut_src & 0xFFFFF) << 5);
@@ -144,32 +145,32 @@ void SWBPWritten(int address, int newvalue)
 		}
 		break;
 
-	case BPMEM_TEV_REGISTER_L:   // Reg 1
-	case BPMEM_TEV_REGISTER_L+2: // Reg 2
-	case BPMEM_TEV_REGISTER_L+4: // Reg 3
-	case BPMEM_TEV_REGISTER_L+6: // Reg 4
+	case BPMEM_TEV_COLOR_RA:
+	case BPMEM_TEV_COLOR_RA + 2:
+	case BPMEM_TEV_COLOR_RA + 4:
+	case BPMEM_TEV_COLOR_RA + 6:
 		{
 			int regNum = (address >> 1 ) & 0x3;
 			TevReg& reg = bpmem.tevregs[regNum];
-			bool konst = reg.type_ra;
+			bool is_konst = reg.type_ra != 0;
 
-			Rasterizer::SetTevReg(regNum, Tev::ALP_C, konst, reg.alpha);
-			Rasterizer::SetTevReg(regNum, Tev::RED_C, konst, reg.red);
+			Rasterizer::SetTevReg(regNum, Tev::ALP_C, is_konst, static_cast<s16>(reg.alpha));
+			Rasterizer::SetTevReg(regNum, Tev::RED_C, is_konst, static_cast<s16>(reg.red));
 
 			break;
 		}
 
-	case BPMEM_TEV_REGISTER_H:   // Reg 1
-	case BPMEM_TEV_REGISTER_H+2: // Reg 2
-	case BPMEM_TEV_REGISTER_H+4: // Reg 3
-	case BPMEM_TEV_REGISTER_H+6: // Reg 4
+	case BPMEM_TEV_COLOR_BG:
+	case BPMEM_TEV_COLOR_BG + 2:
+	case BPMEM_TEV_COLOR_BG + 4:
+	case BPMEM_TEV_COLOR_BG + 6:
 		{
 			int regNum = (address >> 1 ) & 0x3;
 			TevReg& reg = bpmem.tevregs[regNum];
-			bool konst = reg.type_bg;
+			bool is_konst = reg.type_bg != 0;
 
-			Rasterizer::SetTevReg(regNum, Tev::GRN_C, konst, reg.green);
-			Rasterizer::SetTevReg(regNum, Tev::BLU_C, konst, reg.blue);
+			Rasterizer::SetTevReg(regNum, Tev::GRN_C, is_konst, static_cast<s16>(reg.green));
+			Rasterizer::SetTevReg(regNum, Tev::BLU_C, is_konst, static_cast<s16>(reg.blue));
 
 			break;
 		}

@@ -35,6 +35,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "Common/ChunkFile.h"
 #include "VideoBackends/Software/BPMemLoader.h"
 #include "VideoBackends/Software/Clipper.h"
 #include "VideoBackends/Software/NativeVertexFormat.h"
@@ -42,10 +43,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VideoBackends/Software/SWStatistics.h"
 #include "VideoBackends/Software/XFMemLoader.h"
 
-
 namespace Clipper
 {
-	enum { NUM_CLIPPED_VERTICES = 33, NUM_INDICES = NUM_CLIPPED_VERTICES + 3 };
+	enum
+	{
+		NUM_CLIPPED_VERTICES = 33,
+		NUM_INDICES = NUM_CLIPPED_VERTICES + 3
+	};
 
 	static float m_ViewOffset[2];
 
@@ -72,7 +76,8 @@ namespace Clipper
 	}
 
 
-	enum {
+	enum
+	{
 		SKIP_FLAG = -1,
 		CLIP_POS_X_BIT = 0x01,
 		CLIP_NEG_X_BIT = 0x02,
@@ -86,12 +91,25 @@ namespace Clipper
 	{
 		int cmask = 0;
 		Vec4 pos = v->projectedPosition;
-		if (pos.w - pos.x < 0) cmask |= CLIP_POS_X_BIT;
-		if (pos.x + pos.w < 0) cmask |= CLIP_NEG_X_BIT;
-		if (pos.w - pos.y < 0) cmask |= CLIP_POS_Y_BIT;
-		if (pos.y + pos.w < 0) cmask |= CLIP_NEG_Y_BIT;
-		if (pos.w * pos.z > 0) cmask |= CLIP_POS_Z_BIT;
-		if (pos.z + pos.w < 0) cmask |= CLIP_NEG_Z_BIT;
+
+		if (pos.w - pos.x < 0)
+			cmask |= CLIP_POS_X_BIT;
+
+		if (pos.x + pos.w < 0)
+			cmask |= CLIP_NEG_X_BIT;
+
+		if (pos.w - pos.y < 0)
+			cmask |= CLIP_POS_Y_BIT;
+
+		if (pos.y + pos.w < 0)
+			cmask |= CLIP_NEG_Y_BIT;
+
+		if (pos.w * pos.z > 0)
+			cmask |= CLIP_POS_Z_BIT;
+
+		if (pos.z + pos.w < 0)
+			cmask |= CLIP_NEG_Z_BIT;
+
 		return cmask;
 	}
 
@@ -209,7 +227,8 @@ namespace Clipper
 				indices[0] = inlist[0];
 				indices[1] = inlist[1];
 				indices[2] = inlist[2];
-				for (int j = 3; j < n; ++j) {
+				for (int j = 3; j < n; ++j)
+				{
 					indices[numIndices++] = inlist[0];
 					indices[numIndices++] = inlist[j - 1];
 					indices[numIndices++] = inlist[j];
@@ -276,9 +295,11 @@ namespace Clipper
 		if (!CullTest(v0, v1, v2, backface))
 			return;
 
-		int indices[NUM_INDICES] = { 0, 1, 2, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG,
-										SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG,
-										SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG };
+		int indices[NUM_INDICES] = {
+			0, 1, 2, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG,
+			SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG,
+			SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG, SKIP_FLAG
+		};
 		int numIndices = 3;
 
 		if (backface)

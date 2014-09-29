@@ -1,9 +1,14 @@
+// Copyright 2013 Dolphin Emulator Project
+// Licensed under GPLv2
+// Refer to the license.txt file included.
+
 #pragma once
 
 #include <cstddef>
 #include <map>
 #include <string>
 #include <vector>
+#include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
 #include <wx/defs.h>
@@ -22,7 +27,9 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreParameter.h"
+#include "DolphinWX/PostProcessingConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
+#include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -142,6 +149,19 @@ protected:
 		else
 			vconfig.sPostProcessingShader.clear();
 
+		// Should we enable the configuration button?
+		PostProcessingShaderConfiguration postprocessing_shader;
+		postprocessing_shader.LoadShader(vconfig.sPostProcessingShader);
+		button_config_pp->Enable(postprocessing_shader.HasOptions());
+
+		ev.Skip();
+	}
+
+	void Event_ConfigurePPShader(wxCommandEvent &ev)
+	{
+		PostProcessingConfigDiag dialog(this, vconfig.sPostProcessingShader);
+		dialog.ShowModal();
+
 		ev.Skip();
 	}
 
@@ -155,9 +175,9 @@ protected:
 		choice_aamode->Enable(vconfig.backend_info.AAModes.size() > 1);
 		text_aamode->Enable(vconfig.backend_info.AAModes.size() > 1);
 
-		// 3D vision
-		_3d_vision->Enable(vconfig.backend_info.bSupports3DVision);
-		_3d_vision->Show(vconfig.backend_info.bSupports3DVision);
+		// Borderless Fullscreen
+		borderless_fullscreen->Enable(vconfig.backend_info.bSupportsExclusiveFullscreen);
+		borderless_fullscreen->Show(vconfig.backend_info.bSupportsExclusiveFullscreen);
 
 		// EFB copy
 		efbcopy_texture->Enable(vconfig.bEFBCopyEnable);
@@ -168,6 +188,29 @@ protected:
 		virtual_xfb->Enable(vconfig.bUseXFB);
 		real_xfb->Enable(vconfig.bUseXFB);
 
+		// Things which shouldn't be changed during emulation
+		if (Core::IsRunning())
+		{
+			choice_backend->Disable();
+			label_backend->Disable();
+
+			//D3D only
+			if (vconfig.backend_info.Adapters.size())
+			{
+				choice_adapter->Disable();
+				label_adapter->Disable();
+			}
+
+#ifndef __APPLE__
+			// This isn't supported on OSX.
+
+			choice_display_resolution->Disable();
+			label_display_resolution->Disable();
+#endif
+
+			progressive_scan_checkbox->Disable();
+			render_to_main_checkbox->Disable();
+		}
 		ev.Skip();
 	}
 
@@ -184,11 +227,21 @@ protected:
 	void CreateDescriptionArea(wxPanel* const page, wxBoxSizer* const sizer);
 
 	wxChoice* choice_backend;
+	wxChoice* choice_adapter;
 	wxChoice* choice_display_resolution;
+
+	wxStaticText* label_backend;
+	wxStaticText* label_adapter;
+
 	wxStaticText* text_aamode;
 	SettingChoice* choice_aamode;
 
-	SettingCheckBox* _3d_vision;
+	wxStaticText* label_display_resolution;
+
+	wxButton* button_config_pp;
+
+	SettingCheckBox* borderless_fullscreen;
+	SettingCheckBox* render_to_main_checkbox;
 
 	SettingRadioButton* efbcopy_texture;
 	SettingRadioButton* efbcopy_ram;
@@ -196,6 +249,8 @@ protected:
 
 	SettingRadioButton* virtual_xfb;
 	SettingRadioButton* real_xfb;
+
+	wxCheckBox* progressive_scan_checkbox;
 
 	std::map<wxWindow*, wxString> ctrl_descs; // maps setting controls to their descriptions
 	std::map<wxWindow*, wxStaticText*> desc_texts; // maps dialog tabs (which are the parents of the setting controls) to their description text objects

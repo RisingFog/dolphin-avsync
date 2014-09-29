@@ -24,7 +24,7 @@
 #include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/Statistics.h"
-#include "VideoCommon/VertexLoader.h"
+#include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderGen.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
@@ -116,20 +116,25 @@ void VertexManager::Draw(u32 stride)
 			break;
 	}
 
-	if (g_ogl_config.bSupportsGLBaseVertex) {
+	if (g_ogl_config.bSupportsGLBaseVertex)
+	{
 		glDrawRangeElementsBaseVertex(primitive_mode, 0, max_index, index_size, GL_UNSIGNED_SHORT, (u8*)nullptr+s_index_offset, (GLint)s_baseVertex);
-	} else {
+	}
+	else
+	{
 		glDrawRangeElements(primitive_mode, 0, max_index, index_size, GL_UNSIGNED_SHORT, (u8*)nullptr+s_index_offset);
 	}
+
 	INCSTAT(stats.thisFrame.numDrawCalls);
 }
 
 void VertexManager::vFlush(bool useDstAlpha)
 {
-	GLVertexFormat *nativeVertexFmt = (GLVertexFormat*)g_nativeVertexFmt;
+	GLVertexFormat *nativeVertexFmt = (GLVertexFormat*)VertexLoaderManager::GetCurrentVertexFormat();
 	u32 stride  = nativeVertexFmt->GetVertexStride();
 
-	if (m_last_vao != nativeVertexFmt->VAO) {
+	if (m_last_vao != nativeVertexFmt->VAO)
+	{
 		glBindVertexArray(nativeVertexFmt->VAO);
 		m_last_vao = nativeVertexFmt->VAO;
 	}
@@ -144,18 +149,18 @@ void VertexManager::vFlush(bool useDstAlpha)
 	// the same pass as regular rendering.
 	if (useDstAlpha && dualSourcePossible)
 	{
-		ProgramShaderCache::SetShader(DSTALPHA_DUAL_SOURCE_BLEND, g_nativeVertexFmt->m_components);
+		ProgramShaderCache::SetShader(DSTALPHA_DUAL_SOURCE_BLEND, nativeVertexFmt->m_components);
 	}
 	else
 	{
-		ProgramShaderCache::SetShader(DSTALPHA_NONE,g_nativeVertexFmt->m_components);
+		ProgramShaderCache::SetShader(DSTALPHA_NONE, nativeVertexFmt->m_components);
 	}
 
 	// upload global constants
 	ProgramShaderCache::UploadConstants();
 
 	// setup the pointers
-	g_nativeVertexFmt->SetupVertexPointers();
+	nativeVertexFmt->SetupVertexPointers();
 	GL_REPORT_ERRORD();
 
 	Draw(stride);
@@ -163,7 +168,7 @@ void VertexManager::vFlush(bool useDstAlpha)
 	// run through vertex groups again to set alpha
 	if (useDstAlpha && !dualSourcePossible)
 	{
-		ProgramShaderCache::SetShader(DSTALPHA_ALPHA_PASS,g_nativeVertexFmt->m_components);
+		ProgramShaderCache::SetShader(DSTALPHA_ALPHA_PASS, nativeVertexFmt->m_components);
 
 		// only update alpha
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);

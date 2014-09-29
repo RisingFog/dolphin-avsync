@@ -2,8 +2,8 @@
 // Licensed under GPLv2
 // Refer to the license.txt file included.
 
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/NandPaths.h"
 #include "Common/SettingsHandler.h"
@@ -155,8 +155,6 @@ bool CBoot::EmulatedBS2_GC()
 
 	// Load patches
 	PatchEngine::LoadPatches();
-
-	PowerPC::ppcState.DebugCount = 0;
 
 	// If we have any patches that need to be applied very early, here's a good place
 	PatchEngine::ApplyFramePatches();
@@ -417,8 +415,6 @@ bool CBoot::EmulatedBS2_Wii()
 		// return
 		PC = PowerPC::ppcState.gpr[3];
 	}
-
-	PowerPC::ppcState.DebugCount = 0;
 
 	return apploaderRan;
 }

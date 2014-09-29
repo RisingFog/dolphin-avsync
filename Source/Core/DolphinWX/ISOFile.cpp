@@ -14,8 +14,8 @@
 #include <wx/string.h>
 
 #include "Common/ChunkFile.h"
-#include "Common/Common.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/Hash.h"
 #include "Common/IniFile.h"
@@ -288,7 +288,7 @@ const std::string GameListItem::GetWiiFSPath() const
 
 	if (DiscIO::IsVolumeWiiDisc(iso) || DiscIO::IsVolumeWadFile(iso))
 	{
-		u64 title;
+		u64 title = 0;
 
 		iso->GetTitleID((u8*)&title);
 		title = Common::swap64(title);

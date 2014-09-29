@@ -24,52 +24,15 @@ extern char **environ;
 namespace X11Utils
 {
 
-void SendButtonEvent(Display *dpy, int button, int x, int y, bool pressed)
+void ToggleFullscreen(Display *dpy, Window win)
 {
-	XEvent event;
-	Window win = (Window)Core::GetWindowHandle();
-
-	// Init X event structure for mouse button press event
-	event.xbutton.type = pressed ? ButtonPress : ButtonRelease;
-	event.xbutton.x = x;
-	event.xbutton.y = y;
-	event.xbutton.button = button;
-
-	// Send the event
-	if (!XSendEvent(dpy, win, False, False, &event))
-		ERROR_LOG(VIDEO, "Failed to send mouse button event to the emulator window.");
-}
-
-void SendMotionEvent(Display *dpy, int x, int y)
-{
-	XEvent event;
-	Window win = (Window)Core::GetWindowHandle();
-
-	// Init X event structure for mouse motion
-	event.xmotion.type = MotionNotify;
-	event.xmotion.x = x;
-	event.xmotion.y = y;
-
-	// Send the event
-	if (!XSendEvent(dpy, win, False, False, &event))
-		ERROR_LOG(VIDEO, "Failed to send mouse button event to the emulator window.");
-}
-
-void EWMH_Fullscreen(Display *dpy, int action)
-{
-	_assert_(action == _NET_WM_STATE_REMOVE ||
-	         action == _NET_WM_STATE_ADD ||
-	         action == _NET_WM_STATE_TOGGLE);
-
-	Window win = (Window)Core::GetWindowHandle();
-
 	// Init X event structure for _NET_WM_STATE_FULLSCREEN client message
 	XEvent event;
 	event.xclient.type = ClientMessage;
 	event.xclient.message_type = XInternAtom(dpy, "_NET_WM_STATE", False);
 	event.xclient.window = win;
 	event.xclient.format = 32;
-	event.xclient.data.l[0] = action;
+	event.xclient.data.l[0] = _NET_WM_STATE_TOGGLE;
 	event.xclient.data.l[1] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
 
 	// Send the event
@@ -124,7 +87,7 @@ XRRConfiguration::XRRConfiguration(Display *_dpy, Window _win)
 	int XRRMajorVersion, XRRMinorVersion;
 
 	if (!XRRQueryVersion(dpy, &XRRMajorVersion, &XRRMinorVersion) ||
-			(XRRMajorVersion < 1 || (XRRMajorVersion == 1 && XRRMinorVersion < 3)))
+	    (XRRMajorVersion < 1 || (XRRMajorVersion == 1 && XRRMinorVersion < 3)))
 	{
 		WARN_LOG(VIDEO, "XRRExtension not supported.");
 		bValid = false;
@@ -185,8 +148,10 @@ void XRRConfiguration::Update()
 		fullHeight = fb_height;
 	}
 	else
+	{
 		sscanf(SConfig::GetInstance().m_LocalCoreStartupParameter.strFullscreenResolution.c_str(),
 				"%m[^:]: %ux%u", &output_name, &fullWidth, &fullHeight);
+	}
 
 	for (int i = 0; i < screenResources->noutput; i++)
 	{
@@ -285,8 +250,7 @@ void XRRConfiguration::ToggleDisplayMode(bool bFullscreen)
 	XSync(dpy, false);
 }
 
-#if defined(HAVE_WX) && HAVE_WX
-void XRRConfiguration::AddResolutions(wxArrayString& arrayStringFor_FullscreenResolution)
+void XRRConfiguration::AddResolutions(std::vector<std::string>& resos)
 {
 	if (!bValid || !screenResources)
 		return;
@@ -299,9 +263,10 @@ void XRRConfiguration::AddResolutions(wxArrayString& arrayStringFor_FullscreenRe
 
 		if (output_info && output_info->crtc && output_info->connection == RR_Connected)
 		{
-			std::vector<std::string> resos;
 			for (int j = 0; j < output_info->nmode; j++)
+			{
 				for (int k = 0; k < screenResources->nmode; k++)
+				{
 					if (output_info->modes[j] == screenResources->modes[k].id)
 					{
 						const std::string strRes =
@@ -311,15 +276,15 @@ void XRRConfiguration::AddResolutions(wxArrayString& arrayStringFor_FullscreenRe
 						if (std::find(resos.begin(), resos.end(), strRes) == resos.end())
 						{
 							resos.push_back(strRes);
-							arrayStringFor_FullscreenResolution.Add(StrToWxStr(strRes));
 						}
 					}
+				}
+			}
 		}
 		if (output_info)
 			XRRFreeOutputInfo(output_info);
 	}
 }
-#endif
 
 #endif
 

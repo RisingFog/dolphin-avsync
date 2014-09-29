@@ -23,10 +23,6 @@ extern bool g_aspect_wide;
 namespace Core
 {
 
-// Get core parameters
-// TODO: kill, use SConfig instead
-extern SCoreStartupParameter g_CoreStartupParameter;
-
 bool GetIsFramelimiterTempDisabled();
 void SetIsFramelimiterTempDisabled(bool disable);
 
@@ -59,19 +55,13 @@ void SaveScreenShot();
 
 void Callback_WiimoteInterruptChannel(int _number, u16 _channelID, const void* _pData, u32 _Size);
 
-void* GetWindowHandle();
-
-void StartTrace(bool write);
-
 // This displays messages in a user-visible way.
 void DisplayMessage(const std::string& message, int time_in_ms);
 
 std::string GetStateFileName();
 void SetStateFileName(std::string val);
 
-int SyncTrace();
 void SetBlockStart(u32 addr);
-void StopTrace();
 
 bool ShouldSkipFrame(int skipped);
 void VideoThrottle();

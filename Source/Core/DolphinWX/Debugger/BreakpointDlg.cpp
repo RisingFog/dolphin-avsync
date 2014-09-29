@@ -8,12 +8,13 @@
 #include <wx/dialog.h>
 #include <wx/event.h>
 #include <wx/gdicmn.h>
+#include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/string.h>
 #include <wx/textctrl.h>
 
 #include "Common/BreakPoints.h"
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "DolphinWX/WxUtils.h"
@@ -50,7 +51,7 @@ void BreakPointDlg::OnOK(wxCommandEvent& event)
 	}
 	else
 	{
-		PanicAlertT("The address %s is invalid.", WxStrToStr(AddressString).c_str());
+		WxUtils::ShowErrorDialog(wxString::Format(_("The address %s is invalid."), WxStrToStr(AddressString).c_str()));
 	}
 
 	event.Skip();

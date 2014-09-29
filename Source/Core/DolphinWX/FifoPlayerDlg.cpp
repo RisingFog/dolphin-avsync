@@ -20,6 +20,7 @@
 #include <wx/filedlg.h>
 #include <wx/gdicmn.h>
 #include <wx/listbox.h>
+#include <wx/msgdlg.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
@@ -32,7 +33,7 @@
 #include <wx/translation.h>
 #include <wx/utils.h>
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
 #include "Core/FifoPlayer/FifoPlaybackAnalyzer.h"
 #include "Core/FifoPlayer/FifoPlayer.h"
@@ -44,13 +45,8 @@
 
 class wxWindow;
 
-DECLARE_EVENT_TYPE(RECORDING_FINISHED_EVENT, -1)
-DEFINE_EVENT_TYPE(RECORDING_FINISHED_EVENT)
-
-DECLARE_EVENT_TYPE(FRAME_WRITTEN_EVENT, -1)
-DEFINE_EVENT_TYPE(FRAME_WRITTEN_EVENT)
-
-using namespace std;
+wxDEFINE_EVENT(RECORDING_FINISHED_EVENT, wxCommandEvent);
+wxDEFINE_EVENT(FRAME_WRITTEN_EVENT, wxCommandEvent);
 
 static std::recursive_mutex sMutex;
 wxEvtHandler *volatile FifoPlayerDlg::m_EvtHandler = nullptr;
@@ -418,7 +414,7 @@ void FifoPlayerDlg::OnSaveFile(wxCommandEvent& WXUNUSED(event))
 
 			// Wasn't able to save the file, shit's whack, yo.
 			if (!result)
-				PanicAlertT("Error saving file");
+				WxUtils::ShowErrorDialog(_("Error saving file."));
 		}
 	}
 }
@@ -954,7 +950,7 @@ wxString FifoPlayerDlg::CreateRecordingMemSizeLabel() const
 		size_t memBytes = 0;
 		for (size_t frameNum = 0; frameNum < file->GetFrameCount(); ++frameNum)
 		{
-			const vector<MemoryUpdate>& memUpdates = file->GetFrame(frameNum).memoryUpdates;
+			const std::vector<MemoryUpdate>& memUpdates = file->GetFrame(frameNum).memoryUpdates;
 			for (auto& memUpdate : memUpdates)
 				memBytes += memUpdate.size;
 		}

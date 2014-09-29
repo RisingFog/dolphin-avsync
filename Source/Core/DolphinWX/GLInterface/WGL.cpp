@@ -6,7 +6,7 @@
 
 #include "Core/Host.h"
 
-#include "DolphinWX/GLInterface/GLInterface.h"
+#include "DolphinWX/GLInterface/WGL.h"
 
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/VertexShaderManager.h"
@@ -55,27 +55,26 @@ bool cInterfaceWGL::PeekMessages()
 	return TRUE;
 }
 
-// Show the current FPS
-void cInterfaceWGL::UpdateFPSDisplay(const std::string& text)
-{
-	SetWindowTextA((HWND)m_window_handle, text.c_str());
-}
-
 // Create rendering window.
 // Call browser: Core.cpp:EmuThread() > main.cpp:Video_Initialize()
-bool cInterfaceWGL::Create(void *&window_handle)
+bool cInterfaceWGL::Create(void *window_handle)
 {
 	if (window_handle == nullptr)
 		return false;
 
-	int _tx, _ty, _twidth, _theight;
-	Host_GetRenderWindowSize(_tx, _ty, _twidth, _theight);
+	HWND window_handle_reified = reinterpret_cast<HWND>(window_handle);
+	RECT window_rect = {0};
+
+	if (!GetClientRect(window_handle_reified, &window_rect))
+		return false;
 
 	// Control window size and picture scaling
-	s_backbuffer_width = _twidth;
-	s_backbuffer_height = _theight;
+	int twidth  = (window_rect.right - window_rect.left);
+	int theight = (window_rect.bottom - window_rect.top);
+	s_backbuffer_width = twidth;
+	s_backbuffer_height = theight;
 
-	m_window_handle = window_handle;
+	m_window_handle = window_handle_reified;
 
 #ifdef _WIN32
 	dllHandle = LoadLibrary(TEXT("OpenGL32.dll"));
@@ -105,19 +104,26 @@ bool cInterfaceWGL::Create(void *&window_handle)
 
 	int      PixelFormat;               // Holds The Results After Searching For A Match
 
-	if (!(hDC = GetDC((HWND)window_handle))) {
+	if (!(hDC = GetDC(window_handle_reified)))
+	{
 		PanicAlert("(1) Can't create an OpenGL Device context. Fail.");
 		return false;
 	}
-	if (!(PixelFormat = ChoosePixelFormat(hDC, &pfd))) {
+
+	if (!(PixelFormat = ChoosePixelFormat(hDC, &pfd)))
+	{
 		PanicAlert("(2) Can't find a suitable PixelFormat.");
 		return false;
 	}
-	if (!SetPixelFormat(hDC, PixelFormat, &pfd)) {
+
+	if (!SetPixelFormat(hDC, PixelFormat, &pfd))
+	{
 		PanicAlert("(3) Can't set the PixelFormat.");
 		return false;
 	}
-	if (!(hRC = wglCreateContext(hDC))) {
+
+	if (!(hRC = wglCreateContext(hDC)))
+	{
 		PanicAlert("(4) Can't create an OpenGL rendering context.");
 		return false;
 	}
@@ -145,11 +151,11 @@ bool cInterfaceWGL::ClearCurrent()
 void cInterfaceWGL::Update()
 {
 	RECT rcWindow;
-	GetClientRect((HWND)m_window_handle, &rcWindow);
+	GetClientRect(m_window_handle, &rcWindow);
 
 	// Get the new window width and height
-	s_backbuffer_width = rcWindow.right - rcWindow.left;
-	s_backbuffer_height = rcWindow.bottom - rcWindow.top;
+	s_backbuffer_width  = (rcWindow.right - rcWindow.left);
+	s_backbuffer_height = (rcWindow.bottom - rcWindow.top);
 }
 
 // Close backend
@@ -166,7 +172,7 @@ void cInterfaceWGL::Shutdown()
 		hRC = nullptr;
 	}
 
-	if (hDC && !ReleaseDC((HWND)m_window_handle, hDC))
+	if (hDC && !ReleaseDC(m_window_handle, hDC))
 	{
 		ERROR_LOG(VIDEO, "Attempt to release device context failed.");
 		hDC = nullptr;
